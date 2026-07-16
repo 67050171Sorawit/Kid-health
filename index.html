@@ -26,7 +26,6 @@
     display:flex; flex-direction:column;
   }
 
-  /* site header */
   .site-header{
     display:flex; align-items:center; justify-content:space-between;
     padding:18px 24px; max-width:1080px; width:100%; margin:0 auto;
@@ -36,7 +35,6 @@
   .brand .name{ font-family:'Baloo 2'; font-weight:800; font-size:17px; color:var(--cream); }
   .brand .name small{ display:block; font-size:10px; font-weight:500; color:var(--mint); letter-spacing:.08em; text-transform:uppercase; }
 
-  /* page / hero */
   .page{
     flex:1; width:100%; max-width:1080px; margin:0 auto;
     display:flex; align-items:flex-start; justify-content:center; gap:56px;
@@ -160,10 +158,10 @@
   .day-cell.done{ background:var(--mint); border-color:var(--mint); color:#fff; }
   .day-cell.today{ border-color:var(--coral); color:var(--coral); }
 
-  .checkin-card{ background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:20px; margin-top:14px; text-align:center; }
-  .checkin-q{ font-family:'Baloo 2'; font-weight:700; font-size:16px; margin-bottom:16px; }
+  .checkin-card{ background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:18px; margin-top:12px; text-align:center; }
+  .checkin-q{ font-family:'Baloo 2'; font-weight:700; font-size:15px; margin-bottom:14px; }
   .yn-row{ display:flex; gap:10px; }
-  .yn-btn{ flex:1; padding:13px 0; border-radius:12px; font-family:'Baloo 2'; font-weight:700; font-size:15px; border:2px solid var(--line); cursor:pointer; background:#fff;}
+  .yn-btn{ flex:1; padding:12px 0; border-radius:12px; font-family:'Baloo 2'; font-weight:700; font-size:14px; border:2px solid var(--line); cursor:pointer; background:#fff;}
   .yn-btn.yes.active{ background:var(--mint); border-color:var(--mint); color:#fff; }
   .yn-btn.no.active{ background:#F0EAD9; border-color:var(--ink-soft); color:var(--ink-soft); }
 
@@ -177,7 +175,7 @@
 
   .log-item{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; }
   .log-item .lday{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
-  .log-item .lfood{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+  .log-item .lmeal{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
 
   .status-toast{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px; min-height:14px; }
   footer{ margin-top:26px; font-size:11px; color:#6C9490; text-align:center; }
@@ -195,10 +193,10 @@
     <div class="intro">
       <div class="eyebrow">แอปใช้งานจริง (เดโม)</div>
       <h1>ชวนลูกน้อยสร้างนิสัยสุขภาพดี ทีละวัน</h1>
-      <p class="sub">ตอบคำถามความรู้เรื่องอาหาร เช็คอินทุกวัน แล้วดูความคืบหน้าตลอด 4 สัปดาห์ ผ่านหน้าจอด้านขวานี้ได้เลย</p>
+      <p class="sub">ตอบคำถามความรู้เรื่องอาหาร เช็คอินครบ 3 มื้อทุกวัน แล้วดูความคืบหน้าตลอด 4 สัปดาห์ ผ่านหน้าจอด้านขวานี้ได้เลย</p>
       <ul class="feature-list">
         <li><span class="dot"></span>แบบทดสอบความรู้เรื่องโภชนาการ</li>
-        <li><span class="dot"></span>เช็คอินรายวัน + บันทึกอาหารที่กิน</li>
+        <li><span class="dot"></span>เช็คอิน 3 มื้อต่อวัน + บันทึกอาหารที่กิน</li>
         <li><span class="dot"></span>ติดตามความคืบหน้าครบ 4 สัปดาห์</li>
       </ul>
     </div>
@@ -218,6 +216,13 @@ function escapeHtml(str){
   }[ch]));
 }
 
+const mealNames = ['มื้อเช้า','มื้อกลางวัน','มื้อเย็น'];
+const foodTagOptions = ['ข้าวผัด','ผัดผัก','ไข่เจียว','ผลไม้','น้ำหวาน'];
+
+function freshMeals(){
+  return mealNames.map(()=>({ eaten:null, food:'', tags:[] }));
+}
+
 // ============ STATE ============
 const STORAGE_KEY = 'kidhealth-profile-v1';
 const defaultState = {
@@ -228,7 +233,7 @@ const defaultState = {
 };
 let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
-let ctx = { activeWeek:0, checkinEaten:null, foodTags:[], foodText:'' };
+let ctx = { activeWeek:0, meals: freshMeals() };
 
 const screenEl = document.getElementById('screen');
 
@@ -241,7 +246,6 @@ async function loadData(){
   }catch(e){
     // no existing data yet, use defaults
   }
-  // backward-compat: ensure every week has a logs array even if saved before this field existed
   if(Array.isArray(data.weeks)){
     data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
   }
@@ -402,16 +406,28 @@ const builders = {
       return `<div class="day-cell ${done?'done':''} ${isToday?'today':''}">${done?'✓':dayNum}</div>`;
     }).join('');
     const finished = w.done>=7;
+
     const logsHtml = w.logs && w.logs.length ? `
       <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา</div>
       <div class="week-list" style="gap:6px;">
         ${w.logs.slice().reverse().map(l=>{
-          const detail = !l.eaten
-            ? 'ยังไม่ได้ทานข้าว'
-            : (l.food ? escapeHtml(l.food) : (l.tags && l.tags.length ? escapeHtml(l.tags.join(', ')) : 'ทานข้าวแล้ว'));
-          return `<div class="log-item"><div class="lday">วันที่ ${l.day}</div><div class="lfood">${detail}</div></div>`;
+          let mealLines;
+          if(Array.isArray(l.meals)){
+            mealLines = l.meals.map(m=>{
+              const detail = m.eaten
+                ? (m.food ? escapeHtml(m.food) : (m.tags && m.tags.length ? escapeHtml(m.tags.join(', ')) : 'ทานแล้ว'))
+                : 'ไม่ได้ทาน';
+              return `${escapeHtml(m.name)}: ${detail}`;
+            }).join(' · ');
+          }else{
+            mealLines = l.eaten
+              ? (l.food ? escapeHtml(l.food) : (l.tags && l.tags.length ? escapeHtml(l.tags.join(', ')) : 'ทานข้าวแล้ว'))
+              : 'ยังไม่ได้ทานข้าว';
+          }
+          return `<div class="log-item"><div class="lday">วันที่ ${l.day}</div><div class="lmeal">${mealLines}</div></div>`;
         }).join('')}
       </div>` : '';
+
     return `
     <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1}</span><span class="back-link" id="backToWeeks">‹ สัปดาห์ทั้งหมด</span></div>
     <div class="screen-content">
@@ -429,30 +445,37 @@ const builders = {
 
   checkin: () => `
     <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · เช็คอิน</span><span class="back-link" id="backToWeekDetail">‹ ย้อนกลับ</span></div>
-    <div class="screen-content" style="justify-content:center;">
-      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอินวันนี้</div></div>
-      <div class="checkin-card">
-        <div class="checkin-q">ทานข้าวยัง?</div>
-        <div class="yn-row">
-          <button class="yn-btn yes ${ctx.checkinEaten===true?'active':''}" data-val="yes">Yes</button>
-          <button class="yn-btn no ${ctx.checkinEaten===false?'active':''}" data-val="no">No</button>
-        </div>
-      </div>
-      <button class="big-btn" id="checkinNext" ${ctx.checkinEaten===null?'disabled':''}>ถัดไป</button>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอินวันนี้ (3 มื้อ)</div></div>
+      ${mealNames.map((name,mi)=>`
+        <div class="checkin-card">
+          <div class="checkin-q">${name} ทานหรือยัง?</div>
+          <div class="yn-row">
+            <button class="yn-btn yes ${ctx.meals[mi].eaten===true?'active':''}" data-mi="${mi}" data-val="yes">Yes</button>
+            <button class="yn-btn no ${ctx.meals[mi].eaten===false?'active':''}" data-mi="${mi}" data-val="no">No</button>
+          </div>
+        </div>`).join('')}
+      <button class="big-btn" style="margin-top:16px;" id="checkinNext" ${ctx.meals.some(m=>m.eaten===null)?'disabled':''}>ถัดไป</button>
     </div>`,
 
-  foodlog: () => `
+  foodlog: () => {
+    const eatenMeals = ctx.meals
+      .map((m,mi)=>({ eaten:m.eaten, food:m.food, tags:m.tags, mi, name:mealNames[mi] }))
+      .filter(m=>m.eaten===true);
+    return `
     <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · บันทึกอาหาร</span><span class="back-link" id="backToCheckin">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">🍱</span><div class="h2">กินอะไรไปบ้าง?</div></div>
-      <input class="field" id="foodInput" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${escapeHtml(ctx.foodText)}" />
-      <div class="field-label">หรือแตะเลือกจากรายการ</div>
-      <div class="food-tags">
-        ${['ข้าวผัด','ผัดผัก','ไข่เจียว','ผลไม้','น้ำหวาน'].map(t=>`<div class="food-tag ${ctx.foodTags.includes(t)?'on':''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
-      </div>
+      ${eatenMeals.map(m=>`
+        <div class="field-label" style="margin-top:14px;">${m.name}</div>
+        <input class="field" data-food-mi="${m.mi}" placeholder="พิมพ์เมนูอาหาร..." value="${escapeHtml(m.food)}" />
+        <div class="food-tags">
+          ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-mi="${m.mi}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
+        </div>`).join('')}
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="saveFood">OK</button>
-    </div>`,
+    </div>`;
+  },
 
   dayDone: () => `
     <div class="screen-content" style="align-items:center;">
@@ -545,7 +568,7 @@ function bindInteractions(s){
       document.getElementById('backToWeeks2').addEventListener('click', ()=>{ screenState='weeks'; render(); });
     }else{
       document.getElementById('toCheckin').addEventListener('click', ()=>{
-        ctx.checkinEaten = null;
+        ctx.meals = freshMeals();
         screenState='checkin'; render();
       });
     }
@@ -554,31 +577,40 @@ function bindInteractions(s){
   if(s==='checkin'){
     document.getElementById('backToWeekDetail').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
     screenEl.querySelectorAll('.yn-btn').forEach(b=> b.addEventListener('click', ()=>{
-      ctx.checkinEaten = b.dataset.val==='yes';
+      const mi = parseInt(b.dataset.mi);
+      ctx.meals[mi].eaten = b.dataset.val==='yes';
       render();
     }));
     const nextBtn = document.getElementById('checkinNext');
     if(nextBtn) nextBtn.addEventListener('click', ()=>{
-      if(ctx.checkinEaten===true){
-        ctx.foodTags = []; ctx.foodText='';
+      const anyEaten = ctx.meals.some(m=>m.eaten===true);
+      if(anyEaten){
         screenState='foodlog'; render();
       }else{
-        completeDay({ day: data.weeks[ctx.activeWeek].done+1, eaten:false, food:'', tags:[] });
+        finishDay();
       }
     });
   }
 
   if(s==='foodlog'){
     document.getElementById('backToCheckin').addEventListener('click', ()=>{ screenState='checkin'; render(); });
+    screenEl.querySelectorAll('[data-food-mi]').forEach(inp=> inp.addEventListener('input', ()=>{
+      const mi = parseInt(inp.dataset.foodMi);
+      ctx.meals[mi].food = inp.value;
+    }));
     screenEl.querySelectorAll('.food-tag').forEach(t=> t.addEventListener('click', ()=>{
+      const mi = parseInt(t.dataset.mi);
       const tag = t.dataset.tag;
-      if(ctx.foodTags.includes(tag)){ ctx.foodTags = ctx.foodTags.filter(x=>x!==tag); }
-      else{ ctx.foodTags.push(tag); }
+      const tags = ctx.meals[mi].tags;
+      if(tags.includes(tag)){ ctx.meals[mi].tags = tags.filter(x=>x!==tag); }
+      else{ tags.push(tag); }
       render();
     }));
     document.getElementById('saveFood').addEventListener('click', ()=>{
-      ctx.foodText = document.getElementById('foodInput').value.trim();
-      completeDay({ day: data.weeks[ctx.activeWeek].done+1, eaten:true, food: ctx.foodText, tags: ctx.foodTags.slice() });
+      screenEl.querySelectorAll('[data-food-mi]').forEach(inp=>{
+        ctx.meals[parseInt(inp.dataset.foodMi)].food = inp.value.trim();
+      });
+      finishDay();
     });
   }
 
@@ -587,11 +619,14 @@ function bindInteractions(s){
   }
 }
 
-function completeDay(entry){
+function finishDay(){
   const w = data.weeks[ctx.activeWeek];
   if(w.done<7){
     w.done++;
-    w.logs.push(entry || { day: w.done, eaten: ctx.checkinEaten, food:'', tags:[] });
+    w.logs.push({
+      day: w.done,
+      meals: ctx.meals.map((m,mi)=>({ name: mealNames[mi], eaten: m.eaten, food: m.food, tags: m.tags.slice() }))
+    });
   }
   saveData();
   screenState='dayDone';
