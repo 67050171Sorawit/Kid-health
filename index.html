@@ -158,10 +158,10 @@
   .day-cell.done{ background:var(--mint); border-color:var(--mint); color:#fff; }
   .day-cell.today{ border-color:var(--coral); color:var(--coral); }
 
-  .checkin-card{ background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:18px; margin-top:12px; text-align:center; }
-  .checkin-q{ font-family:'Baloo 2'; font-weight:700; font-size:15px; margin-bottom:14px; }
+  .checkin-card{ background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:18px; margin-top:16px; text-align:center; }
+  .checkin-q{ font-family:'Baloo 2'; font-weight:700; font-size:16px; margin-bottom:16px; }
   .yn-row{ display:flex; gap:10px; }
-  .yn-btn{ flex:1; padding:12px 0; border-radius:12px; font-family:'Baloo 2'; font-weight:700; font-size:14px; border:2px solid var(--line); cursor:pointer; background:#fff;}
+  .yn-btn{ flex:1; padding:13px 0; border-radius:12px; font-family:'Baloo 2'; font-weight:700; font-size:15px; border:2px solid var(--line); cursor:pointer; background:#fff;}
   .yn-btn.yes.active{ background:var(--mint); border-color:var(--mint); color:#fff; }
   .yn-btn.no.active{ background:#F0EAD9; border-color:var(--ink-soft); color:var(--ink-soft); }
 
@@ -176,6 +176,7 @@
   .log-item{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; }
   .log-item .lday{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
   .log-item .lmeal{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
+  .log-item .lex{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
 
   .status-toast{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px; min-height:14px; }
   footer{ margin-top:26px; font-size:11px; color:#6C9490; text-align:center; }
@@ -193,10 +194,11 @@
     <div class="intro">
       <div class="eyebrow">แอปใช้งานจริง (เดโม)</div>
       <h1>ชวนลูกน้อยสร้างนิสัยสุขภาพดี ทีละวัน</h1>
-      <p class="sub">ตอบคำถามความรู้เรื่องอาหาร เช็คอินครบ 3 มื้อทุกวัน แล้วดูความคืบหน้าตลอด 4 สัปดาห์ ผ่านหน้าจอด้านขวานี้ได้เลย</p>
+      <p class="sub">ตอบคำถามความรู้เรื่องอาหาร เช็คอินทีละมื้อจนครบ 3 มื้อ และบันทึกการออกกำลังกายทุกวัน แล้วดูความคืบหน้าตลอด 4 สัปดาห์ ผ่านหน้าจอด้านขวานี้ได้เลย</p>
       <ul class="feature-list">
         <li><span class="dot"></span>แบบทดสอบความรู้เรื่องโภชนาการ</li>
-        <li><span class="dot"></span>เช็คอิน 3 มื้อต่อวัน + บันทึกอาหารที่กิน</li>
+        <li><span class="dot"></span>เช็คอินทีละมื้อ + บันทึกอาหารที่กิน</li>
+        <li><span class="dot"></span>บันทึกการออกกำลังกายประจำวัน</li>
         <li><span class="dot"></span>ติดตามความคืบหน้าครบ 4 สัปดาห์</li>
       </ul>
     </div>
@@ -218,9 +220,14 @@ function escapeHtml(str){
 
 const mealNames = ['มื้อเช้า','มื้อกลางวัน','มื้อเย็น'];
 const foodTagOptions = ['ข้าวผัด','ผัดผัก','ไข่เจียว','ผลไม้','น้ำหวาน'];
+const exerciseTagOptions = ['วิ่ง','ปั่นจักรยาน','ว่ายน้ำ','เต้น','กระโดดเชือก','เล่นกีฬา'];
+const totalSteps = mealNames.length + 1; // 3 meals + 1 exercise step
 
 function freshMeals(){
   return mealNames.map(()=>({ eaten:null, food:'', tags:[] }));
+}
+function freshExercise(){
+  return { done:null, type:'', duration:'' };
 }
 
 // ============ STATE ============
@@ -233,7 +240,7 @@ const defaultState = {
 };
 let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
-let ctx = { activeWeek:0, meals: freshMeals() };
+let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise() };
 
 const screenEl = document.getElementById('screen');
 
@@ -424,7 +431,13 @@ const builders = {
               ? (l.food ? escapeHtml(l.food) : (l.tags && l.tags.length ? escapeHtml(l.tags.join(', ')) : 'ทานข้าวแล้ว'))
               : 'ยังไม่ได้ทานข้าว';
           }
-          return `<div class="log-item"><div class="lday">วันที่ ${l.day}</div><div class="lmeal">${mealLines}</div></div>`;
+          let exLine = '';
+          if(l.exercise){
+            exLine = l.exercise.done
+              ? `🏃 ${l.exercise.type ? escapeHtml(l.exercise.type) : 'ออกกำลังกาย'}${l.exercise.duration ? ' · ' + escapeHtml(l.exercise.duration) + ' นาที' : ''}`
+              : '🏃 ไม่ได้ออกกำลังกาย';
+          }
+          return `<div class="log-item"><div class="lday">วันที่ ${l.day}</div><div class="lmeal">${mealLines}</div>${exLine ? `<div class="lex">${exLine}</div>` : ''}</div>`;
         }).join('')}
       </div>` : '';
 
@@ -444,38 +457,63 @@ const builders = {
   },
 
   checkin: () => `
-    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · เช็คอิน</span><span class="back-link" id="backToWeekDetail">‹ ย้อนกลับ</span></div>
+    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · เช็คอิน</span><span class="back-link" id="backToWeekDetail">‹ ยกเลิก</span></div>
     <div class="screen-content">
-      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอินวันนี้ (3 มื้อ)</div></div>
-      ${mealNames.map((name,mi)=>`
-        <div class="checkin-card">
-          <div class="checkin-q">${name} ทานหรือยัง?</div>
-          <div class="yn-row">
-            <button class="yn-btn yes ${ctx.meals[mi].eaten===true?'active':''}" data-mi="${mi}" data-val="yes">Yes</button>
-            <button class="yn-btn no ${ctx.meals[mi].eaten===false?'active':''}" data-mi="${mi}" data-val="no">No</button>
-          </div>
-        </div>`).join('')}
-      <button class="big-btn" style="margin-top:16px;" id="checkinNext" ${ctx.meals.some(m=>m.eaten===null)?'disabled':''}>ถัดไป</button>
+      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอินวันนี้</div></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${(ctx.mealIndex/totalSteps*100)}%"></div></div>
+      <div class="progress-label">ขั้นตอนที่ ${ctx.mealIndex+1}/${totalSteps} · ${mealNames[ctx.mealIndex]}</div>
+      <div class="checkin-card">
+        <div class="checkin-q">${mealNames[ctx.mealIndex]} ทานหรือยัง?</div>
+        <div class="yn-row">
+          <button class="yn-btn yes" id="mealYes">Yes</button>
+          <button class="yn-btn no" id="mealNo">No</button>
+        </div>
+      </div>
+      <div style="margin-top:auto;"></div>
     </div>`,
 
-  foodlog: () => {
-    const eatenMeals = ctx.meals
-      .map((m,mi)=>({ eaten:m.eaten, food:m.food, tags:m.tags, mi, name:mealNames[mi] }))
-      .filter(m=>m.eaten===true);
+  foodlogSingle: () => {
+    const m = ctx.meals[ctx.mealIndex];
     return `
     <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · บันทึกอาหาร</span><span class="back-link" id="backToCheckin">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
-      <div class="title-row"><span class="icon">🍱</span><div class="h2">กินอะไรไปบ้าง?</div></div>
-      ${eatenMeals.map(m=>`
-        <div class="field-label" style="margin-top:14px;">${m.name}</div>
-        <input class="field" data-food-mi="${m.mi}" placeholder="พิมพ์เมนูอาหาร..." value="${escapeHtml(m.food)}" />
-        <div class="food-tags">
-          ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-mi="${m.mi}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
-        </div>`).join('')}
+      <div class="title-row"><span class="icon">🍱</span><div class="h2">${mealNames[ctx.mealIndex]} กินอะไรไปบ้าง?</div></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${(ctx.mealIndex/totalSteps*100)}%"></div></div>
+      <div class="progress-label">ขั้นตอนที่ ${ctx.mealIndex+1}/${totalSteps}</div>
+      <input class="field" id="foodInput" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${escapeHtml(m.food)}" />
+      <div class="field-label">หรือแตะเลือกจากรายการ</div>
+      <div class="food-tags">
+        ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
+      </div>
       <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="saveFood">OK</button>
+      <button class="big-btn" id="mealNext">${ctx.mealIndex < mealNames.length-1 ? 'ถัดไป' : 'ถัดไป: ออกกำลังกาย'}</button>
     </div>`;
   },
+
+  exercise: () => `
+    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · ออกกำลังกาย</span><span class="back-link" id="backToWeekDetail">‹ ยกเลิก</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">🏃</span><div class="h2">ออกกำลังกายวันนี้</div></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${(mealNames.length/totalSteps*100)}%"></div></div>
+      <div class="progress-label">ขั้นตอนที่ ${totalSteps}/${totalSteps} · ออกกำลังกาย</div>
+      <div class="checkin-card">
+        <div class="checkin-q">วันนี้ออกกำลังกายหรือยัง?</div>
+        <div class="yn-row">
+          <button class="yn-btn yes ${ctx.exercise.done===true?'active':''}" data-val="yes">Yes</button>
+          <button class="yn-btn no ${ctx.exercise.done===false?'active':''}" data-val="no">No</button>
+        </div>
+      </div>
+      ${ctx.exercise.done===true ? `
+        <div class="field-label" style="margin-top:14px;">ประเภทกิจกรรม</div>
+        <div class="food-tags">
+          ${exerciseTagOptions.map(t=>`<div class="food-tag ${ctx.exercise.type===t?'on':''}" data-etag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
+        </div>
+        <div class="field-label">ระยะเวลา (นาที)</div>
+        <input class="field" id="durationInput" type="number" placeholder="เช่น 20" value="${escapeHtml(ctx.exercise.duration)}" />
+      ` : ''}
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="exerciseNext" ${ctx.exercise.done===null?'disabled':''}>เสร็จสิ้น</button>
+    </div>`,
 
   dayDone: () => `
     <div class="screen-content" style="align-items:center;">
@@ -569,6 +607,8 @@ function bindInteractions(s){
     }else{
       document.getElementById('toCheckin').addEventListener('click', ()=>{
         ctx.meals = freshMeals();
+        ctx.mealIndex = 0;
+        ctx.exercise = freshExercise();
         screenState='checkin'; render();
       });
     }
@@ -576,40 +616,50 @@ function bindInteractions(s){
 
   if(s==='checkin'){
     document.getElementById('backToWeekDetail').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
-    screenEl.querySelectorAll('.yn-btn').forEach(b=> b.addEventListener('click', ()=>{
-      const mi = parseInt(b.dataset.mi);
-      ctx.meals[mi].eaten = b.dataset.val==='yes';
-      render();
-    }));
-    const nextBtn = document.getElementById('checkinNext');
-    if(nextBtn) nextBtn.addEventListener('click', ()=>{
-      const anyEaten = ctx.meals.some(m=>m.eaten===true);
-      if(anyEaten){
-        screenState='foodlog'; render();
-      }else{
-        finishDay();
-      }
+    document.getElementById('mealYes').addEventListener('click', ()=>{
+      ctx.meals[ctx.mealIndex].eaten = true;
+      screenState='foodlogSingle'; render();
+    });
+    document.getElementById('mealNo').addEventListener('click', ()=>{
+      ctx.meals[ctx.mealIndex].eaten = false;
+      advanceMeal();
     });
   }
 
-  if(s==='foodlog'){
-    document.getElementById('backToCheckin').addEventListener('click', ()=>{ screenState='checkin'; render(); });
-    screenEl.querySelectorAll('[data-food-mi]').forEach(inp=> inp.addEventListener('input', ()=>{
-      const mi = parseInt(inp.dataset.foodMi);
-      ctx.meals[mi].food = inp.value;
-    }));
+  if(s==='foodlogSingle'){
+    document.getElementById('backToCheckin').addEventListener('click', ()=>{
+      screenState='checkin'; render();
+    });
+    const inp = document.getElementById('foodInput');
+    inp.addEventListener('input', ()=>{ ctx.meals[ctx.mealIndex].food = inp.value; });
     screenEl.querySelectorAll('.food-tag').forEach(t=> t.addEventListener('click', ()=>{
-      const mi = parseInt(t.dataset.mi);
       const tag = t.dataset.tag;
-      const tags = ctx.meals[mi].tags;
-      if(tags.includes(tag)){ ctx.meals[mi].tags = tags.filter(x=>x!==tag); }
+      const tags = ctx.meals[ctx.mealIndex].tags;
+      if(tags.includes(tag)){ ctx.meals[ctx.mealIndex].tags = tags.filter(x=>x!==tag); }
       else{ tags.push(tag); }
       render();
     }));
-    document.getElementById('saveFood').addEventListener('click', ()=>{
-      screenEl.querySelectorAll('[data-food-mi]').forEach(inp=>{
-        ctx.meals[parseInt(inp.dataset.foodMi)].food = inp.value.trim();
-      });
+    document.getElementById('mealNext').addEventListener('click', ()=>{
+      ctx.meals[ctx.mealIndex].food = document.getElementById('foodInput').value.trim();
+      advanceMeal();
+    });
+  }
+
+  if(s==='exercise'){
+    document.getElementById('backToWeekDetail').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
+    screenEl.querySelectorAll('.yn-btn').forEach(b=> b.addEventListener('click', ()=>{
+      ctx.exercise.done = b.dataset.val==='yes';
+      render();
+    }));
+    screenEl.querySelectorAll('[data-etag]').forEach(t=> t.addEventListener('click', ()=>{
+      const tag = t.dataset.etag;
+      ctx.exercise.type = (ctx.exercise.type===tag) ? '' : tag;
+      render();
+    }));
+    const durInp = document.getElementById('durationInput');
+    if(durInp) durInp.addEventListener('input', ()=>{ ctx.exercise.duration = durInp.value; });
+    document.getElementById('exerciseNext').addEventListener('click', ()=>{
+      if(durInp) ctx.exercise.duration = durInp.value.trim();
       finishDay();
     });
   }
@@ -619,13 +669,23 @@ function bindInteractions(s){
   }
 }
 
+function advanceMeal(){
+  ctx.mealIndex++;
+  if(ctx.mealIndex >= mealNames.length){
+    screenState='exercise'; render();
+  }else{
+    screenState='checkin'; render();
+  }
+}
+
 function finishDay(){
   const w = data.weeks[ctx.activeWeek];
   if(w.done<7){
     w.done++;
     w.logs.push({
       day: w.done,
-      meals: ctx.meals.map((m,mi)=>({ name: mealNames[mi], eaten: m.eaten, food: m.food, tags: m.tags.slice() }))
+      meals: ctx.meals.map((m,mi)=>({ name: mealNames[mi], eaten: m.eaten, food: m.food, tags: m.tags.slice() })),
+      exercise: { done: ctx.exercise.done, type: ctx.exercise.type, duration: ctx.exercise.duration }
     });
   }
   saveData();
