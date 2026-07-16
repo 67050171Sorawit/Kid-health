@@ -190,6 +190,7 @@
   .challenge-banner{ background:#fff; border:1.5px solid var(--yellow); border-radius:14px; padding:12px 14px; margin-top:12px; }
   .challenge-banner .clabel{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
   .challenge-banner .ctext{ font-family:'Baloo 2'; font-weight:700; font-size:14px; margin-top:2px; }
+  .challenge-banner.food{ border-color:var(--mint); }
 
   .wheel-wrap{ position:relative; width:220px; height:220px; margin:14px auto 6px; }
   .wheel-pointer{ position:absolute; top:-12px; left:50%; transform:translateX(-50%); font-size:20px; color:var(--coral); z-index:3; filter:drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
@@ -280,6 +281,7 @@ const defaultState = {
   onboarded: false,
   playerId: null,
   dailyChallenge: null, // { date:'YYYY-MM-DD', text:'...' }
+  dailyFood: null, // { date:'YYYY-MM-DD', text:'...' }
 };
 let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
@@ -310,6 +312,14 @@ const wheelChallengeSegments = [
   { label:'เดินเล่น 15 นาที 🚶', color:'#FF6B4A' },
   { label:'ยืดเส้นยืดสาย 5 นาที 🤸', color:'#4ECDC4' },
   { label:'นอนก่อน 3 ทุ่ม 🌙', color:'#FFC857' },
+];
+const wheelFoodSegments = [
+  { label:'ข้าวกล้อง + ปลา 🐟', color:'#FF6B4A' },
+  { label:'ผัดผักรวม 🥦', color:'#4ECDC4' },
+  { label:'ไข่ต้ม + นมจืด 🥚', color:'#FFC857' },
+  { label:'ผลไม้รวม 🍎', color:'#FF6B4A' },
+  { label:'ต้มจืดเต้าหู้ 🍲', color:'#4ECDC4' },
+  { label:'สลัดผัก 🥗', color:'#FFC857' },
 ];
 
 // Firebase watches login state for us — this fires on page load AND
@@ -347,6 +357,7 @@ async function loadUserData(){
     data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
   }
   if(!data.playerId) data.playerId = currentUid;
+  if(data.dailyFood === undefined) data.dailyFood = null;
 }
 
 async function saveData(){
@@ -602,8 +613,12 @@ const builders = {
     }).join('');
     const hasChallengeToday = data.dailyChallenge && data.dailyChallenge.date === todayStr();
     const challengeHtml = hasChallengeToday
-      ? `<div class="challenge-banner"><div class="clabel">ภารกิจวันนี้</div><div class="ctext">🎯 ${escapeHtml(data.dailyChallenge.text)}</div></div>`
-      : `<button class="ghost-btn" id="toChallengeWheel" style="margin-top:12px;">🎯 หมุนสุ่มภารกิจประจำวัน</button>`;
+      ? `<div class="challenge-banner"><div class="clabel">ภารกิจออกกำลังกายวันนี้</div><div class="ctext">🎯 ${escapeHtml(data.dailyChallenge.text)}</div></div>`
+      : `<button class="ghost-btn" id="toChallengeWheel" style="margin-top:12px;">🎯 หมุนสุ่มภารกิจออกกำลังกายวันนี้</button>`;
+    const hasFoodToday = data.dailyFood && data.dailyFood.date === todayStr();
+    const foodHtml = hasFoodToday
+      ? `<div class="challenge-banner food"><div class="clabel">เมนูอาหารแนะนำวันนี้</div><div class="ctext">🍽️ ${escapeHtml(data.dailyFood.text)}</div></div>`
+      : `<button class="ghost-btn" id="toFoodWheel" style="margin-top:8px;">🍽️ หมุนสุ่มเมนูอาหารวันนี้</button>`;
     return `
     <div class="topbar"><span class="screen-tag">โปรแกรม</span></div>
     <div class="screen-content">
@@ -611,6 +626,7 @@ const builders = {
       <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
       <div class="user-chip">เข้าสู่ระบบเป็น ${escapeHtml(currentUsername || '')}</div>
       ${challengeHtml}
+      ${foodHtml}
       <div class="week-list">${items}</div>
       <div style="margin-top:auto;"></div>
       <button class="ghost-btn" id="resetBtn">รีเซ็ตข้อมูลทั้งหมด</button>
@@ -795,12 +811,14 @@ const builders = {
       return `<div class="wheel-seg-label" style="transform: rotate(${mid}deg) translateY(-88px);">${escapeHtml(s.label)}</div>`;
     }).join('');
     const isReward = w.mode==='reward';
-    const title = isReward ? 'หมุนวงล้อรับของรางวัล' : 'หมุนวงล้อภารกิจประจำวัน';
-    const icon = isReward ? '🎁' : '🎯';
+    const isFood = w.mode==='food';
+    const title = isReward ? 'หมุนวงล้อรับของรางวัล' : (isFood ? 'หมุนวงล้อเมนูอาหารวันนี้' : 'หมุนวงล้อภารกิจออกกำลังกายวันนี้');
+    const icon = isReward ? '🎁' : (isFood ? '🍽️' : '🎯');
     const showBack = !isReward && !w.spun;
     const resultLabel = (w.resultIndex!=null) ? segs[w.resultIndex].label : '';
+    const doneLabel = isReward ? 'กลับไปหน้า Week' : (isFood ? 'รับเมนูนี้' : 'เริ่มภารกิจนี้');
     return `
-    <div class="topbar"><span class="screen-tag">${isReward?'รางวัล':'ภารกิจวันนี้'}</span>${showBack ? '<span class="back-link" id="wheelBack">‹ ย้อนกลับ</span>' : ''}</div>
+    <div class="topbar"><span class="screen-tag">${isReward?'รางวัล':(isFood?'เมนูวันนี้':'ภารกิจวันนี้')}</span>${showBack ? '<span class="back-link" id="wheelBack">‹ ย้อนกลับ</span>' : ''}</div>
     <div class="screen-content" style="align-items:center;">
       <div class="title-row"><span class="icon">${icon}</span><div class="h2">${title}</div></div>
       <div class="wheel-wrap">
@@ -813,7 +831,7 @@ const builders = {
       ${w.resultIndex==null
         ? `<button class="big-btn" id="spinBtn" style="margin-top:20px;" ${w.spinning?'disabled':''}>${w.spinning?'กำลังหมุน...':'หมุนเลย!'}</button>`
         : `<div class="wheel-result">🎉 ได้รับ: ${escapeHtml(resultLabel)}</div>
-           <button class="big-btn" id="wheelDoneBtn" style="margin-top:14px;">${isReward?'กลับไปหน้า Week':'เริ่มภารกิจนี้'}</button>`}
+           <button class="big-btn" id="wheelDoneBtn" style="margin-top:14px;">${doneLabel}</button>`}
     </div>`;
   },
 
@@ -955,6 +973,8 @@ function bindInteractions(s){
     }));
     const challengeBtn = document.getElementById('toChallengeWheel');
     if(challengeBtn) challengeBtn.addEventListener('click', ()=> openWheel('challenge'));
+    const foodBtn = document.getElementById('toFoodWheel');
+    if(foodBtn) foodBtn.addEventListener('click', ()=> openWheel('food'));
     document.getElementById('resetBtn').addEventListener('click', async ()=>{
       const keepId = data.playerId;
       data = JSON.parse(JSON.stringify(defaultState));
@@ -1137,7 +1157,7 @@ function openEditLog(weekIndex, logIndex){
 
 // ============ WHEEL LOGIC ============
 function openWheel(mode){
-  const segments = mode==='reward' ? wheelRewardSegments : wheelChallengeSegments;
+  const segments = mode==='reward' ? wheelRewardSegments : (mode==='food' ? wheelFoodSegments : wheelChallengeSegments);
   ctx.wheel = { mode, segments, spinning:false, resultIndex:null, rotation:0, spun:false };
   screenState = 'wheel';
   render();
@@ -1184,6 +1204,10 @@ function onWheelDone(){
     if(wk.logs.length){ wk.logs[wk.logs.length-1].reward = label; }
     saveData();
     screenState = 'weekDetail';
+  }else if(w.mode==='food'){
+    data.dailyFood = { date: todayStr(), text: label };
+    saveData();
+    screenState = 'weeks';
   }else{
     data.dailyChallenge = { date: todayStr(), text: label };
     saveData();
