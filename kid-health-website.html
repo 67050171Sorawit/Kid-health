@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>แอปติดตามสุขภาพเด็ก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-deep:#0F3D3E; --bg-deep-2:#0B2D2E;
+    --cream:#FFF8ED; --coral:#FF6B4A; --mint:#4ECDC4; --yellow:#FFC857;
+    --ink:#14302F; --ink-soft:#4C6664; --line:#E7DFCC; --red:#E8563E;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{ height:100%; }
+  body{
+    margin:0; min-height:100vh;
+    background:
+      radial-gradient(circle at 12% -10%, rgba(255,200,87,.18), transparent 42%),
+      radial-gradient(circle at 110% 15%, rgba(78,205,196,.18), transparent 40%),
+      linear-gradient(180deg, var(--bg-deep), var(--bg-deep-2));
+    font-family:'Kanit', sans-serif;
+    color:var(--cream);
+    display:flex; flex-direction:column;
+  }
+
+  /* site header */
+  .site-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 24px; max-width:1080px; width:100%; margin:0 auto;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .logo{ font-size:24px; }
+  .brand .name{ font-family:'Baloo 2'; font-weight:800; font-size:17px; color:var(--cream); }
+  .brand .name small{ display:block; font-size:10px; font-weight:500; color:var(--mint); letter-spacing:.08em; text-transform:uppercase; }
+
+  /* page / hero */
+  .page{
+    flex:1; width:100%; max-width:1080px; margin:0 auto;
+    display:flex; align-items:flex-start; justify-content:center; gap:56px;
+    padding:20px 24px 60px; flex-wrap:wrap;
+  }
+  .intro{
+    flex:1 1 320px; max-width:420px; padding-top:26px;
+  }
+  .eyebrow{font-size:12.5px; letter-spacing:.14em; color:var(--mint); text-transform:uppercase; font-weight:600;}
+  h1{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:clamp(28px,4.2vw,40px); margin:8px 0 12px; line-height:1.15;}
+  .sub{color:#BFE3DF; font-size:15px; max-width:380px; margin:0 0 20px; line-height:1.7;}
+  .feature-list{ list-style:none; padding:0; margin:22px 0 0; display:flex; flex-direction:column; gap:12px; }
+  .feature-list li{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:#D9EFEC; }
+  .feature-list .dot{ width:7px; height:7px; border-radius:50%; background:var(--yellow); flex-shrink:0; }
+
+  .card-wrap{ flex:0 0 380px; width:100%; max-width:380px; }
+
+  .screen{
+    width:100%; min-height:560px;
+    background:var(--cream);
+    border-radius:28px;
+    overflow:hidden;
+    position:relative;
+    display:flex; flex-direction:column;
+    box-shadow:0 25px 60px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.4);
+  }
+  .screen-content{
+    flex:1;
+    display:flex; flex-direction:column;
+    padding:44px 26px 26px;
+    color:var(--ink);
+  }
+  .topbar{
+    position:absolute; top:18px; left:26px; right:26px;
+    display:flex; align-items:center; justify-content:space-between; z-index:2;
+  }
+  .screen-tag{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:600; }
+  .back-link{ font-size:12px; color:var(--coral); font-weight:600; cursor:pointer; }
+
+  @media (max-width:760px){
+    .page{ flex-direction:column; align-items:center; padding-top:8px; gap:24px; }
+    .intro{ text-align:center; padding-top:6px; }
+    .sub{ margin-left:auto; margin-right:auto; }
+    .feature-list{ align-items:center; }
+    .feature-list li{ justify-content:center; }
+  }
+
+  .mascot{ font-size:52px; text-align:center; margin:6px 0 16px; }
+  .lang-row{ display:flex; gap:12px; }
+  .lang-btn{
+    flex:1; padding:16px 0; border-radius:16px; border:2px solid var(--line);
+    background:#fff; font-family:'Baloo 2'; font-weight:700; font-size:16px;
+    color:var(--ink); text-align:center; cursor:pointer;
+  }
+  .lang-btn.active{ border-color:var(--coral); background:#FFF1EC; color:var(--coral); }
+
+  .field-label{ font-size:12px; color:var(--ink-soft); font-weight:600; margin:12px 0 6px; }
+  .field{
+    width:100%; padding:13px 14px; border-radius:12px; border:1.5px solid var(--line);
+    background:#fff; font-family:'Kanit'; font-size:14.5px; color:var(--ink);
+  }
+  .field::placeholder{ color:#B9AF97; }
+  .row2{ display:flex; gap:10px; }
+  .row2 > div{ flex:1; }
+  .error-msg{ font-size:12px; color:var(--red); margin-top:8px; min-height:14px; }
+
+  .big-btn{
+    margin-top:auto;
+    width:100%; padding:14px 0; border-radius:14px; border:none;
+    background:var(--coral); color:#fff; font-family:'Baloo 2'; font-weight:700; font-size:16px;
+    cursor:pointer; box-shadow:0 6px 0 #D6502F;
+  }
+  .big-btn:disabled{ opacity:.4; cursor:default; box-shadow:none; }
+  .ghost-btn{
+    margin-top:10px; width:100%; padding:12px 0; border-radius:14px; border:1.5px solid var(--line);
+    background:transparent; color:var(--ink-soft); font-family:'Kanit'; font-weight:500; font-size:14px; cursor:pointer;
+  }
+
+  .title-row{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .title-row .icon{ font-size:24px; }
+  .h2{ font-family:'Baloo 2'; font-weight:700; font-size:18px; margin:0; }
+
+  .progress-track{ height:6px; background:var(--line); border-radius:99px; margin:14px 0 4px; overflow:hidden; }
+  .progress-fill{ height:100%; background:var(--mint); border-radius:99px; transition:width .3s ease; }
+  .progress-label{ font-size:11px; color:var(--ink-soft); }
+
+  .quiz-card{ background:#fff; border:1.5px solid var(--line); border-radius:14px; padding:14px; margin-top:10px; }
+  .quiz-q{ font-size:13px; font-weight:600; margin-bottom:9px; line-height:1.5; }
+  .quiz-opt{
+    display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:10px;
+    border:1.5px solid var(--line); font-size:12.5px; margin-bottom:7px; cursor:pointer;
+  }
+  .quiz-opt.selected{ border-color:var(--coral); background:#FFF1EC; }
+  .quiz-opt.correct{ border-color:var(--mint); background:#EBFAF8; }
+  .quiz-opt.wrong{ border-color:var(--red); background:#FDECE9; }
+  .radio{ width:15px; height:15px; border-radius:50%; border:2px solid var(--ink-soft); flex-shrink:0; }
+  .radio.on{ background:var(--coral); border-color:var(--coral); }
+
+  .score-hero{ text-align:center; margin:20px 0; }
+  .score-num{ font-family:'Baloo 2'; font-weight:800; font-size:44px; color:var(--coral); }
+  .score-cap{ font-size:12px; color:var(--ink-soft); }
+
+  .week-list{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
+  .week-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px; border-radius:14px; border:1.5px solid var(--line); background:#fff; cursor:pointer;
+  }
+  .week-item.locked{ opacity:.55; cursor:default; }
+  .week-item.active{ border-color:var(--yellow); background:#FFF8E6; }
+  .week-item .wname{ font-family:'Baloo 2'; font-weight:700; font-size:14px; }
+  .week-item .wstatus{ font-size:11px; color:var(--ink-soft); }
+  .badge-done{ font-size:11px; background:var(--mint); color:#fff; padding:3px 9px; border-radius:999px; font-weight:600; }
+  .badge-lock{ font-size:14px; color:#C8BFA5; }
+  .badge-complete{ font-size:11px; background:var(--coral); color:#fff; padding:3px 9px; border-radius:999px; font-weight:600; }
+
+  .day-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin:14px 0; }
+  .day-cell{
+    aspect-ratio:1; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; border:1.5px solid var(--line); background:#fff; color:var(--ink-soft);
+  }
+  .day-cell.done{ background:var(--mint); border-color:var(--mint); color:#fff; }
+  .day-cell.today{ border-color:var(--coral); color:var(--coral); }
+
+  .checkin-card{ background:#fff; border:1.5px solid var(--line); border-radius:18px; padding:20px; margin-top:14px; text-align:center; }
+  .checkin-q{ font-family:'Baloo 2'; font-weight:700; font-size:16px; margin-bottom:16px; }
+  .yn-row{ display:flex; gap:10px; }
+  .yn-btn{ flex:1; padding:13px 0; border-radius:12px; font-family:'Baloo 2'; font-weight:700; font-size:15px; border:2px solid var(--line); cursor:pointer; background:#fff;}
+  .yn-btn.yes.active{ background:var(--mint); border-color:var(--mint); color:#fff; }
+  .yn-btn.no.active{ background:#F0EAD9; border-color:var(--ink-soft); color:var(--ink-soft); }
+
+  .food-tags{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .food-tag{ font-size:11.5px; padding:7px 12px; border-radius:999px; border:1.5px solid var(--line); background:#fff; cursor:pointer; }
+  .food-tag.on{ background:var(--coral); border-color:var(--coral); color:#fff; }
+
+  .done-hero{ text-align:center; margin-top:auto; margin-bottom:auto; }
+  .done-hero .em{ font-size:56px; }
+  .done-hero .h2{ margin-top:10px; }
+
+  .status-toast{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px; min-height:14px; }
+  footer{ margin-top:26px; font-size:11px; color:#6C9490; text-align:center; }
+</style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <span class="logo">🧑‍🦱</span>
+      <div class="name">Kid Health Journey<small>โปรแกรมสุขภาพ 4 สัปดาห์</small></div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="intro">
+      <div class="eyebrow">แอปใช้งานจริง (เดโม)</div>
+      <h1>ชวนลูกน้อยสร้างนิสัยสุขภาพดี ทีละวัน</h1>
+      <p class="sub">ตอบคำถามความรู้เรื่องอาหาร เช็คอินทุกวัน แล้วดูความคืบหน้าตลอด 4 สัปดาห์ ผ่านหน้าจอด้านขวานี้ได้เลย</p>
+      <ul class="feature-list">
+        <li><span class="dot"></span>แบบทดสอบความรู้เรื่องโภชนาการ</li>
+        <li><span class="dot"></span>เช็คอินรายวัน + บันทึกอาหารที่กิน</li>
+        <li><span class="dot"></span>ติดตามความคืบหน้าครบ 4 สัปดาห์</li>
+      </ul>
+    </div>
+
+    <div class="card-wrap">
+      <div class="screen" id="screen"></div>
+    </div>
+  </main>
+
+  <footer>เวอร์ชันนี้เก็บข้อมูลแบบส่วนตัวในอุปกรณ์ของผู้ใช้แต่ละคน ยังไม่เชื่อมกับ LINE OA</footer>
+
+<script>
+// ============ STATE ============
+const STORAGE_KEY = 'kidhealth-profile-v1';
+const defaultState = {
+  profile: { lang:'th', name:'', weight:'', height:'' },
+  quiz: { answers:[null,null,null], submitted:false, score:0 },
+  weeks: [ { done:0 }, { done:0 }, { done:0 }, { done:0 } ],
+  onboarded: false,
+};
+let data = JSON.parse(JSON.stringify(defaultState));
+let screenState = 'loading';
+let ctx = { activeWeek:0, checkinEaten:null, foodTags:[], foodText:'' };
+
+const screenEl = document.getElementById('screen');
+
+async function loadData(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, false);
+    if(res && res.value){
+      data = JSON.parse(res.value);
+    }
+  }catch(e){
+    // no existing data yet, use defaults
+  }
+  screenState = data.onboarded ? 'weeks' : 'lang';
+  render();
+}
+async function saveData(){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+  }catch(e){
+    console.error('save failed', e);
+  }
+}
+
+const quizQuestions = [
+  {
+    q:"มื้อไหนมีประโยชน์กับร่างกายมากที่สุด?",
+    opts:["ไก่ทอด + น้ำอัดลม","ข้าว + ปลา + ผักต้ม","โดนัท 2 ชิ้น"],
+    correct:1
+  },
+  {
+    q:"ถ้าหิวระหว่างวัน ควรเลือกทานอะไรดีที่สุด?",
+    opts:["ผลไม้สด","มันฝรั่งทอด","ลูกอม"],
+    correct:0
+  },
+  {
+    q:"ควรดื่มน้ำเปล่าแทนเครื่องดื่มชนิดใด เพื่อสุขภาพที่ดี?",
+    opts:["น้ำแข็งเปล่า","น้ำอัดลม / น้ำหวาน","นมจืด"],
+    correct:1
+  },
+];
+
+// ============ RENDER ROUTER ============
+function render(){
+  screenEl.innerHTML = builders[screenState]();
+  bindInteractions(screenState);
+}
+
+const builders = {
+  loading: () => `<div class="screen-content" style="align-items:center; justify-content:center;">
+      <div style="font-size:14px; color:var(--ink-soft);">กำลังโหลด...</div>
+    </div>`,
+
+  lang: () => `
+    <div class="screen-content" style="align-items:center;">
+      <div class="mascot">🧑‍🦱</div>
+      <div class="h2" style="text-align:center; margin-bottom:20px;">เลือกภาษาที่ใช้</div>
+      <div class="lang-row">
+        <div class="lang-btn ${data.profile.lang==='th'?'active':''}" data-lang="th">ไทย</div>
+        <div class="lang-btn ${data.profile.lang==='en'?'active':''}" data-lang="en">Eng</div>
+      </div>
+      <button class="big-btn" style="margin-top:24px;" id="toName">เริ่มต้นใช้งาน</button>
+    </div>`,
+
+  name: () => `
+    <div class="topbar"><span class="screen-tag">2 · ชื่อ</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">📝</span><div class="h2">ข้อมูลของหนู</div></div>
+      <div class="field-label">ชื่อ - นามสกุล</div>
+      <input class="field" id="nameInput" placeholder="เช่น น้องพลอย ใจดี" value="${data.profile.name}" />
+      <div class="error-msg" id="nameErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toBody">ยืนยัน</button>
+    </div>`,
+
+  body: () => `
+    <div class="topbar"><span class="screen-tag">3 · นน./สส.</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">📏</span><div class="h2">น้ำหนัก / ส่วนสูง</div></div>
+      <div class="row2" style="margin-top:14px;">
+        <div>
+          <div class="field-label">น้ำหนัก (กก.)</div>
+          <input class="field" id="weightInput" type="number" placeholder="0.0" value="${data.profile.weight}" />
+        </div>
+        <div>
+          <div class="field-label">ส่วนสูง (ซม.)</div>
+          <input class="field" id="heightInput" type="number" placeholder="0.0" value="${data.profile.height}" />
+        </div>
+      </div>
+      <div class="error-msg" id="bodyErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toQuiz">OK</button>
+    </div>`,
+
+  quiz: () => `
+    <div class="topbar"><span class="screen-tag">4 · ความรู้</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">🥗</span><div class="h2">ความรู้เรื่องอาหาร</div></div>
+      ${quizQuestions.map((qq,i)=>`
+        <div class="quiz-card">
+          <div class="quiz-q">${i+1}. ${qq.q}</div>
+          ${qq.opts.map((op,oi)=>`
+            <div class="quiz-opt ${data.quiz.answers[i]===oi?'selected':''}" data-qi="${i}" data-oi="${oi}">
+              <span class="radio ${data.quiz.answers[i]===oi?'on':''}"></span>${op}
+            </div>`).join('')}
+        </div>`).join('')}
+      <div class="error-msg" id="quizErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toQuizResult">ส่งคำตอบ</button>
+    </div>`,
+
+  quizResult: () => {
+    const total = quizQuestions.length;
+    return `
+    <div class="screen-content" style="align-items:center;">
+      <div class="topbar" style="position:static; margin-bottom:10px;"><span class="screen-tag">ผลทดสอบ</span></div>
+      <div class="score-hero">
+        <div class="score-num">${data.quiz.score}/${total}</div>
+        <div class="score-cap">ข้อที่ตอบถูก</div>
+      </div>
+      <div style="font-size:13px; color:var(--ink-soft); text-align:center; line-height:1.7; margin-bottom:10px;">
+        ${data.quiz.score===total ? 'เก่งมาก! รู้เรื่องอาหารดีเลย 🎉' : 'ไม่เป็นไร ค่อย ๆ เรียนรู้ไปพร้อมกันนะ 💪'}
+      </div>
+      <button class="big-btn" id="toWeeksFirst">เริ่มโปรแกรม 4 สัปดาห์</button>
+    </div>`;
+  },
+
+  weeks: () => {
+    const items = data.weeks.map((w,i)=>{
+      const locked = i>0 && data.weeks[i-1].done < 7;
+      const complete = w.done>=7;
+      const label = complete ? `<span class="badge-complete">เสร็จแล้ว</span>` : locked ? `<span class="badge-lock">🔒</span>` : `<span class="badge-done">${w.done}/7 วัน</span>`;
+      return `<div class="week-item ${locked?'locked':''}" data-week="${i}" ${locked?'':'data-clickable="1"'}>
+        <div><div class="wname">Week ${i+1}</div><div class="wstatus">${locked?'ยังไม่ปลดล็อก':(complete?'ครบ 7 วันแล้ว':'กำลังทำอยู่')}</div></div>
+        ${label}
+      </div>`;
+    }).join('');
+    return `
+    <div class="topbar"><span class="screen-tag">โปรแกรม</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${data.profile.name || 'เพื่อนนักสู้'}</div></div>
+      <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
+      <div class="week-list">${items}</div>
+      <div style="margin-top:auto;"></div>
+      <button class="ghost-btn" id="resetBtn">รีเซ็ตข้อมูลทั้งหมด</button>
+    </div>`;
+  },
+
+  weekDetail: () => {
+    const w = data.weeks[ctx.activeWeek];
+    const cells = Array.from({length:7}, (_,i)=>{
+      const dayNum = i+1;
+      const done = dayNum <= w.done;
+      const isToday = dayNum === w.done+1;
+      return `<div class="day-cell ${done?'done':''} ${isToday?'today':''}">${done?'✓':dayNum}</div>`;
+    }).join('');
+    const finished = w.done>=7;
+    return `
+    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1}</span><span class="back-link" id="backToWeeks">‹ สัปดาห์ทั้งหมด</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">🗓️</span><div class="h2">Week ${ctx.activeWeek+1}</div></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${(w.done/7*100)}%"></div></div>
+      <div class="progress-label">${w.done}/7 วัน</div>
+      <div class="day-grid">${cells}</div>
+      <div style="margin-top:auto;"></div>
+      ${finished
+        ? `<button class="big-btn" id="backToWeeks2">กลับไปหน้าสัปดาห์</button>`
+        : `<button class="big-btn" id="toCheckin">เช็คอินวันนี้</button>`}
+    </div>`;
+  },
+
+  checkin: () => `
+    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · เช็คอิน</span><span class="back-link" id="backToWeekDetail">‹ ย้อนกลับ</span></div>
+    <div class="screen-content" style="justify-content:center;">
+      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอินวันนี้</div></div>
+      <div class="checkin-card">
+        <div class="checkin-q">ทานข้าวยัง?</div>
+        <div class="yn-row">
+          <button class="yn-btn yes ${ctx.checkinEaten===true?'active':''}" data-val="yes">Yes</button>
+          <button class="yn-btn no ${ctx.checkinEaten===false?'active':''}" data-val="no">No</button>
+        </div>
+      </div>
+      <button class="big-btn" id="checkinNext" ${ctx.checkinEaten===null?'disabled':''}>ถัดไป</button>
+    </div>`,
+
+  foodlog: () => `
+    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · บันทึกอาหาร</span><span class="back-link" id="backToCheckin">‹ ย้อนกลับ</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">🍱</span><div class="h2">กินอะไรไปบ้าง?</div></div>
+      <input class="field" id="foodInput" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${ctx.foodText}" />
+      <div class="field-label">หรือแตะเลือกจากรายการ</div>
+      <div class="food-tags">
+        ${['ข้าวผัด','ผัดผัก','ไข่เจียว','ผลไม้','น้ำหวาน'].map(t=>`<div class="food-tag ${ctx.foodTags.includes(t)?'on':''}" data-tag="${t}">${t}</div>`).join('')}
+      </div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="saveFood">OK</button>
+    </div>`,
+
+  dayDone: () => `
+    <div class="screen-content" style="align-items:center;">
+      <div class="done-hero">
+        <div class="em">🎉</div>
+        <div class="h2">เก่งมาก! เช็คอินสำเร็จ</div>
+        <div style="font-size:12.5px; color:var(--ink-soft); margin-top:6px;">วันนี้ทำสำเร็จแล้ว เจอกันพรุ่งนี้นะ</div>
+      </div>
+      <button class="big-btn" id="backToWeekDetail2">กลับไปหน้า Week ${ctx.activeWeek+1}</button>
+    </div>`,
+};
+
+// ============ INTERACTIONS ============
+function bindInteractions(s){
+  if(s==='lang'){
+    screenEl.querySelectorAll('.lang-btn').forEach(b=> b.addEventListener('click', ()=>{
+      data.profile.lang = b.dataset.lang;
+      render();
+    }));
+    document.getElementById('toName').addEventListener('click', ()=>{ screenState='name'; render(); });
+  }
+
+  if(s==='name'){
+    document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='lang'; render(); });
+    document.getElementById('toBody').addEventListener('click', ()=>{
+      const val = document.getElementById('nameInput').value.trim();
+      if(!val){ document.getElementById('nameErr').textContent = 'กรุณากรอกชื่อก่อนนะ'; return; }
+      data.profile.name = val;
+      screenState='body'; render();
+    });
+  }
+
+  if(s==='body'){
+    document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='name'; render(); });
+    document.getElementById('toQuiz').addEventListener('click', ()=>{
+      const wv = document.getElementById('weightInput').value;
+      const hv = document.getElementById('heightInput').value;
+      if(!wv || !hv || Number(wv)<=0 || Number(hv)<=0){
+        document.getElementById('bodyErr').textContent = 'กรอกน้ำหนักและส่วนสูงให้ครบก่อนนะ';
+        return;
+      }
+      data.profile.weight = wv; data.profile.height = hv;
+      screenState='quiz'; render();
+    });
+  }
+
+  if(s==='quiz'){
+    document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='body'; render(); });
+    screenEl.querySelectorAll('.quiz-opt').forEach(o=> o.addEventListener('click', ()=>{
+      data.quiz.answers[parseInt(o.dataset.qi)] = parseInt(o.dataset.oi);
+      render();
+    }));
+    document.getElementById('toQuizResult').addEventListener('click', ()=>{
+      if(data.quiz.answers.includes(null)){
+        document.getElementById('quizErr').textContent = 'ตอบให้ครบทุกข้อก่อนนะ';
+        return;
+      }
+      let score = 0;
+      quizQuestions.forEach((qq,i)=>{ if(data.quiz.answers[i]===qq.correct) score++; });
+      data.quiz.score = score;
+      data.quiz.submitted = true;
+      screenState='quizResult'; render();
+    });
+  }
+
+  if(s==='quizResult'){
+    document.getElementById('toWeeksFirst').addEventListener('click', ()=>{
+      data.onboarded = true;
+      saveData();
+      screenState='weeks'; render();
+    });
+  }
+
+  if(s==='weeks'){
+    screenEl.querySelectorAll('.week-item[data-clickable="1"]').forEach(w=> w.addEventListener('click', ()=>{
+      ctx.activeWeek = parseInt(w.dataset.week);
+      screenState='weekDetail'; render();
+    }));
+    document.getElementById('resetBtn').addEventListener('click', async ()=>{
+      data = JSON.parse(JSON.stringify(defaultState));
+      await saveData();
+      screenState='lang'; render();
+    });
+  }
+
+  if(s==='weekDetail'){
+    document.getElementById('backToWeeks').addEventListener('click', ()=>{ screenState='weeks'; render(); });
+    const finished = data.weeks[ctx.activeWeek].done>=7;
+    if(finished){
+      document.getElementById('backToWeeks2').addEventListener('click', ()=>{ screenState='weeks'; render(); });
+    }else{
+      document.getElementById('toCheckin').addEventListener('click', ()=>{
+        ctx.checkinEaten = null;
+        screenState='checkin'; render();
+      });
+    }
+  }
+
+  if(s==='checkin'){
+    document.getElementById('backToWeekDetail').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
+    screenEl.querySelectorAll('.yn-btn').forEach(b=> b.addEventListener('click', ()=>{
+      ctx.checkinEaten = b.dataset.val==='yes';
+      render();
+    }));
+    const nextBtn = document.getElementById('checkinNext');
+    if(nextBtn) nextBtn.addEventListener('click', ()=>{
+      if(ctx.checkinEaten===true){
+        ctx.foodTags = []; ctx.foodText='';
+        screenState='foodlog'; render();
+      }else{
+        completeDay();
+      }
+    });
+  }
+
+  if(s==='foodlog'){
+    document.getElementById('backToCheckin').addEventListener('click', ()=>{ screenState='checkin'; render(); });
+    screenEl.querySelectorAll('.food-tag').forEach(t=> t.addEventListener('click', ()=>{
+      const tag = t.dataset.tag;
+      if(ctx.foodTags.includes(tag)){ ctx.foodTags = ctx.foodTags.filter(x=>x!==tag); }
+      else{ ctx.foodTags.push(tag); }
+      render();
+    }));
+    document.getElementById('saveFood').addEventListener('click', ()=>{
+      ctx.foodText = document.getElementById('foodInput').value.trim();
+      completeDay();
+    });
+  }
+
+  if(s==='dayDone'){
+    document.getElementById('backToWeekDetail2').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
+  }
+}
+
+function completeDay(){
+  const w = data.weeks[ctx.activeWeek];
+  if(w.done<7) w.done++;
+  saveData();
+  screenState='dayDone';
+  render();
+}
+
+loadData();
+</script>
+</body>
+</html>
