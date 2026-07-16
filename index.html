@@ -198,11 +198,6 @@
   .admin-row{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; margin-bottom:8px; }
   .admin-row .aname{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
   .admin-row .ameta{ font-size:10.5px; color:var(--ink-soft); margin-top:3px; }
-
-  .auth-tabs{ display:flex; gap:8px; margin-bottom:6px; }
-  .auth-tab{ flex:1; text-align:center; padding:9px 0; border-radius:10px; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; border:1.5px solid var(--line); background:#fff; }
-  .auth-tab.active{ border-color:var(--coral); background:#FFF1EC; color:var(--coral); }
-  .user-chip{ font-size:11px; color:var(--ink-soft); text-align:center; margin-bottom:6px; }
 </style>
 </head>
 <body>
@@ -219,7 +214,7 @@
     </div>
   </main>
 
-  <footer>ข้อมูลของหนูผูกกับบัญชีที่ล็อกอิน เข้าเครื่องไหนก็เห็นข้อมูลเดิม<span class="admin-link" id="adminEntry">สำหรับแอดมิน</span></footer>
+  <footer>เวอร์ชันนี้เก็บข้อมูลแบบส่วนตัวในอุปกรณ์ของผู้ใช้แต่ละคน ยังไม่เชื่อมกับ LINE OA<span class="admin-link" id="adminEntry">สำหรับแอดมิน</span></footer>
 
 <script>
 // ============ UTIL ============
@@ -242,7 +237,7 @@ function freshExercise(){
 }
 
 // ============ STATE ============
-const SESSION_KEY = 'kidhealth-session-v1'; // remembers who is logged in on THIS device only
+const STORAGE_KEY = 'kidhealth-profile-v1';
 const PLAYERS_INDEX_KEY = 'kidhealth-players-index';
 const ADMIN_PASSWORD = 'kidhealth2026'; // demo password for the admin dashboard
 const defaultState = {
@@ -257,28 +252,11 @@ let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
 let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise(), wheel:null, adminPlayers:[] };
 
-// Login state — the account (username) currently signed in, and its
-// password hash kept in memory so saveData() can re-write the account
-// record without asking for the password again on every save.
-let currentUser = null;
-let accountPasswordHash = null;
-
 const screenEl = document.getElementById('screen');
 
-function accountKey(username){
-  return 'kidhealth-account:' + username.trim().toLowerCase();
+function genPlayerId(){
+  return 'p_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
 }
-
-// Simple SHA-256 hash using the browser's built-in Web Crypto API.
-// Note: this is a lightweight demo-level login (no backend, no salt) —
-// good enough for a school project, but shouldn't be used for real
-// sensitive passwords.
-async function hashPassword(pw){
-  const enc = new TextEncoder().encode(pw);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
 function todayStr(){
   return new Date().toISOString().slice(0,10);
 }
@@ -301,123 +279,31 @@ const wheelChallengeSegments = [
 ];
 
 async function loadData(){
-  // Check if this device remembers a logged-in session, and if so, try to
-  // load that account's data from shared storage (so the same login works
-  // on any device, not just the one that created it).
   try{
-    const sessRes = await window.storage.get(SESSION_KEY, false);
-    const username = sessRes && sessRes.value ? JSON.parse(sessRes.value).username : null;
-    if(username){
-      const acc = await window.storage.get(accountKey(username), true);
-      if(acc && acc.value){
-        const accObj = JSON.parse(acc.value);
-        data = accObj.data;
-        accountPasswordHash = accObj.passwordHash;
-        currentUser = accObj.username;
-      }
+    const res = await window.storage.get(STORAGE_KEY, false);
+    if(res && res.value){
+      data = JSON.parse(res.value);
     }
   }catch(e){
-    // no valid session / account found — fall through to login screen
+    // no existing data yet, use defaults
   }
-
-  if(currentUser){
-    if(Array.isArray(data.weeks)){
-      data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
-    }
-    if(!data.playerId){
-      data.playerId = currentUser;
-    }
-    screenState = data.onboarded ? 'weeks' : 'lang';
-    await saveData();
-  }else{
-    screenState = 'login';
+  if(Array.isArray(data.weeks)){
+    data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
   }
+  if(!data.playerId){
+    data.playerId = genPlayerId();
+  }
+  screenState = data.onboarded ? 'weeks' : 'lang';
+  await saveData();
   render();
 }
-
 async function saveData(){
-  if(!currentUser) return; // nothing to save until someone is logged in
   try{
-    const accObj = { username: currentUser, passwordHash: accountPasswordHash, data };
-    await window.storage.set(accountKey(currentUser), JSON.stringify(accObj), true);
+    await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
   }catch(e){
     console.error('save failed', e);
   }
   syncPlayerRecord();
-}
-
-// ============ LOGIN / SIGNUP / LOGOUT ============
-// Returns null on success, or a Thai error message string on failure.
-async function doSignup(usernameRaw, password, confirmPassword){
-  const username = (usernameRaw || '').trim();
-  if(!username || !password) return 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
-  if(username.length < 3) return 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร';
-  if(password.length < 4) return 'รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร';
-  if(password !== confirmPassword) return 'รหัสผ่านทั้งสองช่องไม่ตรงกัน';
-
-  const key = accountKey(username);
-  try{
-    const existing = await window.storage.get(key, true);
-    if(existing && existing.value) return 'ชื่อผู้ใช้นี้มีคนใช้แล้ว ลองชื่ออื่นนะ';
-  }catch(e){
-    // key not found = username is available, continue
-  }
-
-  const hash = await hashPassword(password);
-  currentUser = username;
-  accountPasswordHash = hash;
-  data = JSON.parse(JSON.stringify(defaultState));
-  data.playerId = username;
-
-  try{
-    await window.storage.set(key, JSON.stringify({ username, passwordHash: hash, data }), true);
-    await window.storage.set(SESSION_KEY, JSON.stringify({ username }), false);
-  }catch(e){
-    return 'สมัครสมาชิกไม่สำเร็จ ลองใหม่อีกครั้งนะ';
-  }
-  syncPlayerRecord();
-  return null;
-}
-
-async function doLogin(usernameRaw, password){
-  const username = (usernameRaw || '').trim();
-  if(!username || !password) return 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
-
-  let acc;
-  try{
-    const res = await window.storage.get(accountKey(username), true);
-    if(!res || !res.value) return 'ไม่พบชื่อผู้ใช้นี้';
-    acc = JSON.parse(res.value);
-  }catch(e){
-    return 'ไม่พบชื่อผู้ใช้นี้';
-  }
-
-  const hash = await hashPassword(password);
-  if(hash !== acc.passwordHash) return 'รหัสผ่านไม่ถูกต้อง';
-
-  currentUser = acc.username;
-  accountPasswordHash = hash;
-  data = acc.data;
-  if(Array.isArray(data.weeks)){
-    data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
-  }
-  if(!data.playerId) data.playerId = currentUser;
-
-  try{
-    await window.storage.set(SESSION_KEY, JSON.stringify({ username: currentUser }), false);
-  }catch(e){ /* session save failing isn't fatal — user is still logged in for this visit */ }
-  return null;
-}
-
-async function doLogout(){
-  currentUser = null;
-  accountPasswordHash = null;
-  data = JSON.parse(JSON.stringify(defaultState));
-  try{
-    await window.storage.delete(SESSION_KEY, false);
-  }catch(e){ /* nothing to clear */ }
-  screenState = 'login';
-  render();
 }
 
 // Push a summary of this player's data to shared storage so the admin
@@ -499,38 +385,6 @@ function render(){
 const builders = {
   loading: () => `<div class="screen-content" style="align-items:center; justify-content:center;">
       <div style="font-size:14px; color:var(--ink-soft);">กำลังโหลด...</div>
-    </div>`,
-
-  login: () => `
-    <div class="screen-content" style="align-items:center;">
-      <div class="mascot">🔐</div>
-      <div class="h2" style="text-align:center; margin-bottom:4px;">เข้าสู่ระบบ</div>
-      <div style="font-size:11.5px; color:var(--ink-soft); text-align:center; margin-bottom:18px;">เข้าสู่ระบบเพื่อบันทึกความคืบหน้าของหนู ใช้ได้ทุกเครื่อง</div>
-      <div class="field-label">ชื่อผู้ใช้</div>
-      <input class="field" id="loginUsername" placeholder="ชื่อผู้ใช้" autocomplete="username" />
-      <div class="field-label">รหัสผ่าน</div>
-      <input class="field" id="loginPassword" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" />
-      <div class="error-msg" id="loginErr"></div>
-      <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="loginBtn">เข้าสู่ระบบ</button>
-      <button class="ghost-btn" id="toSignup">ยังไม่มีบัญชี? สมัครสมาชิก</button>
-    </div>`,
-
-  signup: () => `
-    <div class="screen-content" style="align-items:center;">
-      <div class="mascot">🧑‍🦱</div>
-      <div class="h2" style="text-align:center; margin-bottom:4px;">สมัครสมาชิก</div>
-      <div style="font-size:11.5px; color:var(--ink-soft); text-align:center; margin-bottom:18px;">สร้างบัญชีใหม่เพื่อเริ่มโปรแกรมสุขภาพ 4 สัปดาห์</div>
-      <div class="field-label">ชื่อผู้ใช้</div>
-      <input class="field" id="signupUsername" placeholder="ตั้งชื่อผู้ใช้ (ไม่มีเว้นวรรค)" autocomplete="username" />
-      <div class="field-label">รหัสผ่าน</div>
-      <input class="field" id="signupPassword" type="password" placeholder="อย่างน้อย 4 ตัวอักษร" autocomplete="new-password" />
-      <div class="field-label">ยืนยันรหัสผ่าน</div>
-      <input class="field" id="signupConfirm" type="password" placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password" />
-      <div class="error-msg" id="signupErr"></div>
-      <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="signupBtn">สมัครสมาชิก</button>
-      <button class="ghost-btn" id="toLogin">มีบัญชีอยู่แล้ว? เข้าสู่ระบบ</button>
     </div>`,
 
   lang: () => `
@@ -639,12 +493,10 @@ const builders = {
     <div class="screen-content">
       <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${escapeHtml(data.profile.name) || 'เพื่อนนักสู้'}</div></div>
       <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
-      <div class="user-chip">เข้าสู่ระบบเป็น ${escapeHtml(currentUser || '')}</div>
       ${challengeHtml}
       <div class="week-list">${items}</div>
       <div style="margin-top:auto;"></div>
       <button class="ghost-btn" id="resetBtn">รีเซ็ตข้อมูลทั้งหมด</button>
-      <button class="ghost-btn" id="logoutBtn">ออกจากระบบ</button>
     </div>`;
   },
 
@@ -884,41 +736,6 @@ const builders = {
 
 // ============ INTERACTIONS ============
 function bindInteractions(s){
-  if(s==='login'){
-    document.getElementById('toSignup').addEventListener('click', ()=>{ screenState='signup'; render(); });
-    const submitLogin = async ()=>{
-      const u = document.getElementById('loginUsername').value;
-      const p = document.getElementById('loginPassword').value;
-      const errEl = document.getElementById('loginErr');
-      errEl.textContent = 'กำลังตรวจสอบ...';
-      const err = await doLogin(u, p);
-      if(err){ errEl.textContent = err; return; }
-      errEl.textContent = '';
-      screenState = data.onboarded ? 'weeks' : 'lang';
-      render();
-    };
-    document.getElementById('loginBtn').addEventListener('click', submitLogin);
-    document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitLogin(); });
-  }
-
-  if(s==='signup'){
-    document.getElementById('toLogin').addEventListener('click', ()=>{ screenState='login'; render(); });
-    const submitSignup = async ()=>{
-      const u = document.getElementById('signupUsername').value;
-      const p = document.getElementById('signupPassword').value;
-      const c = document.getElementById('signupConfirm').value;
-      const errEl = document.getElementById('signupErr');
-      errEl.textContent = 'กำลังสร้างบัญชี...';
-      const err = await doSignup(u, p, c);
-      if(err){ errEl.textContent = err; return; }
-      errEl.textContent = '';
-      screenState = 'lang';
-      render();
-    };
-    document.getElementById('signupBtn').addEventListener('click', submitSignup);
-    document.getElementById('signupConfirm').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitSignup(); });
-  }
-
   if(s==='lang'){
     screenEl.querySelectorAll('.lang-btn').forEach(b=> b.addEventListener('click', ()=>{
       data.profile.lang = b.dataset.lang;
@@ -992,7 +809,6 @@ function bindInteractions(s){
       await saveData();
       screenState='lang'; render();
     });
-    document.getElementById('logoutBtn').addEventListener('click', doLogout);
   }
 
   if(s==='weekDetail'){
