@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg-deep:#0F3D3E; --bg-deep-2:#0B2D2E;
@@ -198,6 +201,11 @@
   .admin-row{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; margin-bottom:8px; }
   .admin-row .aname{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
   .admin-row .ameta{ font-size:10.5px; color:var(--ink-soft); margin-top:3px; }
+
+  .auth-tabs{ display:flex; gap:8px; margin-bottom:6px; }
+  .auth-tab{ flex:1; text-align:center; padding:9px 0; border-radius:10px; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; border:1.5px solid var(--line); background:#fff; }
+  .auth-tab.active{ border-color:var(--coral); background:#FFF1EC; color:var(--coral); }
+  .user-chip{ font-size:11px; color:var(--ink-soft); text-align:center; margin-bottom:6px; }
 </style>
 </head>
 <body>
@@ -214,7 +222,7 @@
     </div>
   </main>
 
-  <footer>เวอร์ชันนี้เก็บข้อมูลแบบส่วนตัวในอุปกรณ์ของผู้ใช้แต่ละคน ยังไม่เชื่อมกับ LINE OA<span class="admin-link" id="adminEntry">สำหรับแอดมิน</span></footer>
+  <footer>ข้อมูลของหนูผูกกับบัญชีที่ล็อกอิน เข้าเครื่องไหนก็เห็นข้อมูลเดิม<span class="admin-link" id="adminEntry">สำหรับแอดมิน</span></footer>
 
 <script>
 // ============ UTIL ============
@@ -237,9 +245,34 @@ function freshExercise(){
 }
 
 // ============ STATE ============
-const STORAGE_KEY = 'kidhealth-profile-v1';
-const PLAYERS_INDEX_KEY = 'kidhealth-players-index';
-const ADMIN_PASSWORD = 'kidhealth2026'; // demo password for the admin dashboard
+// ---- Firebase setup ----
+// 1) Create a free project at https://console.firebase.google.com
+// 2) In the project, enable Authentication > Sign-in method > Email/Password
+// 3) Enable Firestore Database (start in "test mode" while building, then
+//    switch to the rules given in the README notes below)
+// 4) Project settings > General > Your apps > Web app (</>) to get this config
+// 5) Paste your own values in below — the placeholders will NOT work as-is.
+const firebaseConfig = {
+  apiKey: "AIzaSyB0vS1EJ_dkd0AuHDNHcYsVA6Kw7Xucqmw",
+  authDomain: "kid-health-8e636.firebaseapp.com",
+  projectId: "kid-health-8e636",
+  storageBucket: "kid-health-8e636.firebasestorage.app",
+  messagingSenderId: "231413828772",
+  appId: "1:231413828772:web:e5f611ac2be73ad939ea31",
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Firebase Auth needs an email format, but our UI just asks for a
+// "username" — so we turn the username into a fake email address behind
+// the scenes. Users never see this, they only ever type a username.
+function usernameToEmail(username){
+  return username.trim().toLowerCase().replace(/\s+/g, '') + '@kidhealth.local';
+}
+
+const PLAYERS_INDEX_KEY = 'kidhealth-players-index'; // unused with Firebase, kept for reference
+const ADMIN_PASSWORD = 'kidhealth2026'; // demo password for the admin dashboard (UI-level gate only)
 const defaultState = {
   profile: { lang:'th', name:'', weight:'', height:'' },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
@@ -252,11 +285,12 @@ let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
 let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise(), wheel:null, adminPlayers:[] };
 
+// Login state
+let currentUsername = ''; // display username, shown in the UI
+let currentUid = null;    // Firebase Auth uid, used as the Firestore doc id
+
 const screenEl = document.getElementById('screen');
 
-function genPlayerId(){
-  return 'p_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
-}
 function todayStr(){
   return new Date().toISOString().slice(0,10);
 }
@@ -278,59 +312,115 @@ const wheelChallengeSegments = [
   { label:'นอนก่อน 3 ทุ่ม 🌙', color:'#FFC857' },
 ];
 
-async function loadData(){
+// Firebase watches login state for us — this fires on page load AND
+// whenever the user signs in/out, on any device/browser.
+auth.onAuthStateChanged(async (user) => {
+  if(user){
+    currentUid = user.uid;
+    currentUsername = (user.email || '').split('@')[0];
+    await loadUserData();
+    screenState = data.onboarded ? 'weeks' : 'lang';
+  }else{
+    currentUid = null;
+    currentUsername = '';
+    data = JSON.parse(JSON.stringify(defaultState));
+    screenState = 'login';
+  }
+  render();
+});
+
+async function loadUserData(){
   try{
-    const res = await window.storage.get(STORAGE_KEY, false);
-    if(res && res.value){
-      data = JSON.parse(res.value);
+    const doc = await db.collection('users').doc(currentUid).get();
+    if(doc.exists){
+      data = doc.data().data;
+    }else{
+      data = JSON.parse(JSON.stringify(defaultState));
+      data.playerId = currentUid;
+      await db.collection('users').doc(currentUid).set({ username: currentUsername, data });
     }
   }catch(e){
-    // no existing data yet, use defaults
+    console.error('load user data failed', e);
+    data = JSON.parse(JSON.stringify(defaultState));
   }
   if(Array.isArray(data.weeks)){
     data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
   }
-  if(!data.playerId){
-    data.playerId = genPlayerId();
-  }
-  screenState = data.onboarded ? 'weeks' : 'lang';
-  await saveData();
-  render();
+  if(!data.playerId) data.playerId = currentUid;
 }
+
 async function saveData(){
+  if(!currentUid) return; // nothing to save until someone is logged in
   try{
-    await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+    await db.collection('users').doc(currentUid).set({ username: currentUsername, data }, { merge:true });
   }catch(e){
     console.error('save failed', e);
   }
   syncPlayerRecord();
 }
 
-// Push a summary of this player's data to shared storage so the admin
-// dashboard (password protected) can see everyone who has played.
+// ============ LOGIN / SIGNUP / LOGOUT ============
+// Returns null on success, or a Thai error message string on failure.
+async function doSignup(usernameRaw, password, confirmPassword){
+  const username = (usernameRaw || '').trim();
+  if(!username || !password) return 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+  if(username.length < 3) return 'ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร';
+  if(!/^[a-zA-Z0-9_.]+$/.test(username)) return 'ชื่อผู้ใช้ใช้ได้แค่ตัวอักษรอังกฤษ ตัวเลข และ _ . เท่านั้น';
+  if(password.length < 6) return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+  if(password !== confirmPassword) return 'รหัสผ่านทั้งสองช่องไม่ตรงกัน';
+
+  try{
+    await auth.createUserWithEmailAndPassword(usernameToEmail(username), password);
+    // onAuthStateChanged will fire automatically and load/create the data doc
+    return null;
+  }catch(e){
+    if(e.code === 'auth/email-already-in-use') return 'ชื่อผู้ใช้นี้มีคนใช้แล้ว ลองชื่ออื่นนะ';
+    if(e.code === 'auth/weak-password') return 'รหัสผ่านนี้ไม่ปลอดภัยพอ ลองตั้งยาวขึ้นอีกนิด';
+    console.error(e);
+    return 'สมัครสมาชิกไม่สำเร็จ ลองใหม่อีกครั้งนะ';
+  }
+}
+
+async function doLogin(usernameRaw, password){
+  const username = (usernameRaw || '').trim();
+  if(!username || !password) return 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน';
+  try{
+    await auth.signInWithEmailAndPassword(usernameToEmail(username), password);
+    return null; // onAuthStateChanged handles loading data + screen switch
+  }catch(e){
+    if(e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password'){
+      return 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+    }
+    console.error(e);
+    return 'เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้งนะ';
+  }
+}
+
+async function doLogout(){
+  try{
+    await auth.signOut();
+    // onAuthStateChanged fires and resets screenState to 'login'
+  }catch(e){
+    console.error(e);
+  }
+}
+
+// Push a privacy-light summary of this player's progress to a public
+// Firestore collection so the admin dashboard (password-gated in the UI)
+// can see everyone who has played. Weight/height stay private — only in
+// each user's own "users/{uid}" document.
 async function syncPlayerRecord(){
-  if(!data.playerId) return;
+  if(!currentUid) return;
   const record = {
-    id: data.playerId,
+    id: currentUid,
     name: data.profile.name || '',
-    weight: data.profile.weight || '',
-    height: data.profile.height || '',
     quizScore: data.quiz.submitted ? data.quiz.score : null,
     weeks: data.weeks.map(w=>w.done),
     totalDays: data.weeks.reduce((sum,w)=>sum+w.done,0),
     updatedAt: new Date().toISOString(),
   };
   try{
-    await window.storage.set('kidhealth-player:'+data.playerId, JSON.stringify(record), true);
-    let idx = [];
-    try{
-      const idxRes = await window.storage.get(PLAYERS_INDEX_KEY, true);
-      if(idxRes && idxRes.value) idx = JSON.parse(idxRes.value);
-    }catch(e){ /* index doesn't exist yet */ }
-    if(!idx.includes(data.playerId)){
-      idx.push(data.playerId);
-      await window.storage.set(PLAYERS_INDEX_KEY, JSON.stringify(idx), true);
-    }
+    await db.collection('public_summary').doc(currentUid).set(record);
   }catch(e){
     console.error('player sync failed', e);
   }
@@ -341,14 +431,8 @@ async function loadAdminData(){
   render();
   let players = [];
   try{
-    const idxRes = await window.storage.get(PLAYERS_INDEX_KEY, true);
-    const ids = (idxRes && idxRes.value) ? JSON.parse(idxRes.value) : [];
-    for(const id of ids){
-      try{
-        const r = await window.storage.get('kidhealth-player:'+id, true);
-        if(r && r.value) players.push(JSON.parse(r.value));
-      }catch(e){ /* skip missing record */ }
-    }
+    const snap = await db.collection('public_summary').get();
+    snap.forEach(doc => players.push(doc.data()));
   }catch(e){
     console.error('load admin data failed', e);
   }
@@ -385,6 +469,38 @@ function render(){
 const builders = {
   loading: () => `<div class="screen-content" style="align-items:center; justify-content:center;">
       <div style="font-size:14px; color:var(--ink-soft);">กำลังโหลด...</div>
+    </div>`,
+
+  login: () => `
+    <div class="screen-content" style="align-items:center;">
+      <div class="mascot">🔐</div>
+      <div class="h2" style="text-align:center; margin-bottom:4px;">เข้าสู่ระบบ</div>
+      <div style="font-size:11.5px; color:var(--ink-soft); text-align:center; margin-bottom:18px;">เข้าสู่ระบบเพื่อบันทึกความคืบหน้าของหนู ใช้ได้ทุกเครื่อง</div>
+      <div class="field-label">ชื่อผู้ใช้</div>
+      <input class="field" id="loginUsername" placeholder="ชื่อผู้ใช้" autocomplete="username" />
+      <div class="field-label">รหัสผ่าน</div>
+      <input class="field" id="loginPassword" type="password" placeholder="รหัสผ่าน" autocomplete="current-password" />
+      <div class="error-msg" id="loginErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="loginBtn">เข้าสู่ระบบ</button>
+      <button class="ghost-btn" id="toSignup">ยังไม่มีบัญชี? สมัครสมาชิก</button>
+    </div>`,
+
+  signup: () => `
+    <div class="screen-content" style="align-items:center;">
+      <div class="mascot">🧑‍🦱</div>
+      <div class="h2" style="text-align:center; margin-bottom:4px;">สมัครสมาชิก</div>
+      <div style="font-size:11.5px; color:var(--ink-soft); text-align:center; margin-bottom:18px;">สร้างบัญชีใหม่เพื่อเริ่มโปรแกรมสุขภาพ 4 สัปดาห์</div>
+      <div class="field-label">ชื่อผู้ใช้</div>
+      <input class="field" id="signupUsername" placeholder="ตั้งชื่อผู้ใช้ (ไม่มีเว้นวรรค)" autocomplete="username" />
+      <div class="field-label">รหัสผ่าน</div>
+      <input class="field" id="signupPassword" type="password" placeholder="อย่างน้อย 4 ตัวอักษร" autocomplete="new-password" />
+      <div class="field-label">ยืนยันรหัสผ่าน</div>
+      <input class="field" id="signupConfirm" type="password" placeholder="พิมพ์รหัสผ่านอีกครั้ง" autocomplete="new-password" />
+      <div class="error-msg" id="signupErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="signupBtn">สมัครสมาชิก</button>
+      <button class="ghost-btn" id="toLogin">มีบัญชีอยู่แล้ว? เข้าสู่ระบบ</button>
     </div>`,
 
   lang: () => `
@@ -493,10 +609,12 @@ const builders = {
     <div class="screen-content">
       <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${escapeHtml(data.profile.name) || 'เพื่อนนักสู้'}</div></div>
       <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
+      <div class="user-chip">เข้าสู่ระบบเป็น ${escapeHtml(currentUsername || '')}</div>
       ${challengeHtml}
       <div class="week-list">${items}</div>
       <div style="margin-top:auto;"></div>
       <button class="ghost-btn" id="resetBtn">รีเซ็ตข้อมูลทั้งหมด</button>
+      <button class="ghost-btn" id="logoutBtn">ออกจากระบบ</button>
     </div>`;
   },
 
@@ -717,7 +835,7 @@ const builders = {
       const updated = p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}) : '-';
       return `<div class="admin-row">
         <div class="aname">${escapeHtml(p.name || '(ไม่ระบุชื่อ)')}</div>
-        <div class="ameta">น้ำหนัก ${escapeHtml(p.weight||'-')} กก. · ส่วนสูง ${escapeHtml(p.height||'-')} ซม. · ควิซ ${p.quizScore!=null ? p.quizScore+'/3' : '-'}</div>
+        <div class="ameta">ควิซ ${p.quizScore!=null ? p.quizScore+'/3' : '-'}</div>
         <div class="ameta">${weeksStr || '-'} · รวม ${p.totalDays||0} วัน</div>
         <div class="ameta" style="opacity:.7;">อัปเดตล่าสุด ${updated}</div>
       </div>`;
@@ -736,6 +854,41 @@ const builders = {
 
 // ============ INTERACTIONS ============
 function bindInteractions(s){
+  if(s==='login'){
+    document.getElementById('toSignup').addEventListener('click', ()=>{ screenState='signup'; render(); });
+    const submitLogin = async ()=>{
+      const u = document.getElementById('loginUsername').value;
+      const p = document.getElementById('loginPassword').value;
+      const errEl = document.getElementById('loginErr');
+      errEl.textContent = 'กำลังตรวจสอบ...';
+      const err = await doLogin(u, p);
+      if(err){ errEl.textContent = err; return; }
+      errEl.textContent = '';
+      screenState = data.onboarded ? 'weeks' : 'lang';
+      render();
+    };
+    document.getElementById('loginBtn').addEventListener('click', submitLogin);
+    document.getElementById('loginPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitLogin(); });
+  }
+
+  if(s==='signup'){
+    document.getElementById('toLogin').addEventListener('click', ()=>{ screenState='login'; render(); });
+    const submitSignup = async ()=>{
+      const u = document.getElementById('signupUsername').value;
+      const p = document.getElementById('signupPassword').value;
+      const c = document.getElementById('signupConfirm').value;
+      const errEl = document.getElementById('signupErr');
+      errEl.textContent = 'กำลังสร้างบัญชี...';
+      const err = await doSignup(u, p, c);
+      if(err){ errEl.textContent = err; return; }
+      errEl.textContent = '';
+      screenState = 'lang';
+      render();
+    };
+    document.getElementById('signupBtn').addEventListener('click', submitSignup);
+    document.getElementById('signupConfirm').addEventListener('keydown', (e)=>{ if(e.key==='Enter') submitSignup(); });
+  }
+
   if(s==='lang'){
     screenEl.querySelectorAll('.lang-btn').forEach(b=> b.addEventListener('click', ()=>{
       data.profile.lang = b.dataset.lang;
@@ -809,6 +962,7 @@ function bindInteractions(s){
       await saveData();
       screenState='lang'; render();
     });
+    document.getElementById('logoutBtn').addEventListener('click', doLogout);
   }
 
   if(s==='weekDetail'){
@@ -1066,8 +1220,8 @@ document.getElementById('adminEntry').addEventListener('click', ()=>{
   screenState = 'adminLogin';
   render();
 });
-
-loadData();
+// Initial screen is driven by auth.onAuthStateChanged(...) above —
+// it fires once automatically as soon as Firebase checks the login state.
 </script>
 </body>
 </html>
