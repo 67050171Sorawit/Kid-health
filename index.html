@@ -175,6 +175,10 @@
   .done-hero .em{ font-size:56px; }
   .done-hero .h2{ margin-top:10px; }
 
+  .log-item{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; }
+  .log-item .lday{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
+  .log-item .lfood{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+
   .status-toast{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px; min-height:14px; }
   footer{ margin-top:26px; font-size:11px; color:#6C9490; text-align:center; }
 </style>
@@ -207,12 +211,19 @@
   <footer>เวอร์ชันนี้เก็บข้อมูลแบบส่วนตัวในอุปกรณ์ของผู้ใช้แต่ละคน ยังไม่เชื่อมกับ LINE OA</footer>
 
 <script>
+// ============ UTIL ============
+function escapeHtml(str){
+  return String(str == null ? '' : str).replace(/[&<>"']/g, ch => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[ch]));
+}
+
 // ============ STATE ============
 const STORAGE_KEY = 'kidhealth-profile-v1';
 const defaultState = {
   profile: { lang:'th', name:'', weight:'', height:'' },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
-  weeks: [ { done:0 }, { done:0 }, { done:0 }, { done:0 } ],
+  weeks: [ { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] } ],
   onboarded: false,
 };
 let data = JSON.parse(JSON.stringify(defaultState));
@@ -229,6 +240,10 @@ async function loadData(){
     }
   }catch(e){
     // no existing data yet, use defaults
+  }
+  // backward-compat: ensure every week has a logs array even if saved before this field existed
+  if(Array.isArray(data.weeks)){
+    data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
   }
   screenState = data.onboarded ? 'weeks' : 'lang';
   render();
@@ -286,7 +301,7 @@ const builders = {
     <div class="screen-content">
       <div class="title-row"><span class="icon">📝</span><div class="h2">ข้อมูลของหนู</div></div>
       <div class="field-label">ชื่อ - นามสกุล</div>
-      <input class="field" id="nameInput" placeholder="เช่น น้องพลอย ใจดี" value="${data.profile.name}" />
+      <input class="field" id="nameInput" placeholder="เช่น น้องพลอย ใจดี" value="${escapeHtml(data.profile.name)}" />
       <div class="error-msg" id="nameErr"></div>
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="toBody">ยืนยัน</button>
@@ -299,11 +314,11 @@ const builders = {
       <div class="row2" style="margin-top:14px;">
         <div>
           <div class="field-label">น้ำหนัก (กก.)</div>
-          <input class="field" id="weightInput" type="number" placeholder="0.0" value="${data.profile.weight}" />
+          <input class="field" id="weightInput" type="number" placeholder="0.0" value="${escapeHtml(data.profile.weight)}" />
         </div>
         <div>
           <div class="field-label">ส่วนสูง (ซม.)</div>
-          <input class="field" id="heightInput" type="number" placeholder="0.0" value="${data.profile.height}" />
+          <input class="field" id="heightInput" type="number" placeholder="0.0" value="${escapeHtml(data.profile.height)}" />
         </div>
       </div>
       <div class="error-msg" id="bodyErr"></div>
@@ -330,6 +345,18 @@ const builders = {
 
   quizResult: () => {
     const total = quizQuestions.length;
+    const reviewHtml = quizQuestions.map((qq,i)=>{
+      const userAns = data.quiz.answers[i];
+      return `<div class="quiz-card">
+        <div class="quiz-q">${i+1}. ${qq.q}</div>
+        ${qq.opts.map((op,oi)=>{
+          let cls = '';
+          if(oi===qq.correct) cls='correct';
+          else if(oi===userAns) cls='wrong';
+          return `<div class="quiz-opt ${cls}"><span class="radio ${oi===userAns?'on':''}"></span>${op}</div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
     return `
     <div class="screen-content" style="align-items:center;">
       <div class="topbar" style="position:static; margin-bottom:10px;"><span class="screen-tag">ผลทดสอบ</span></div>
@@ -340,7 +367,8 @@ const builders = {
       <div style="font-size:13px; color:var(--ink-soft); text-align:center; line-height:1.7; margin-bottom:10px;">
         ${data.quiz.score===total ? 'เก่งมาก! รู้เรื่องอาหารดีเลย 🎉' : 'ไม่เป็นไร ค่อย ๆ เรียนรู้ไปพร้อมกันนะ 💪'}
       </div>
-      <button class="big-btn" id="toWeeksFirst">เริ่มโปรแกรม 4 สัปดาห์</button>
+      <div style="width:100%;">${reviewHtml}</div>
+      <button class="big-btn" id="toWeeksFirst" style="margin-top:16px;">เริ่มโปรแกรม 4 สัปดาห์</button>
     </div>`;
   },
 
@@ -357,7 +385,7 @@ const builders = {
     return `
     <div class="topbar"><span class="screen-tag">โปรแกรม</span></div>
     <div class="screen-content">
-      <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${data.profile.name || 'เพื่อนนักสู้'}</div></div>
+      <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${escapeHtml(data.profile.name) || 'เพื่อนนักสู้'}</div></div>
       <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
       <div class="week-list">${items}</div>
       <div style="margin-top:auto;"></div>
@@ -374,6 +402,16 @@ const builders = {
       return `<div class="day-cell ${done?'done':''} ${isToday?'today':''}">${done?'✓':dayNum}</div>`;
     }).join('');
     const finished = w.done>=7;
+    const logsHtml = w.logs && w.logs.length ? `
+      <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา</div>
+      <div class="week-list" style="gap:6px;">
+        ${w.logs.slice().reverse().map(l=>{
+          const detail = !l.eaten
+            ? 'ยังไม่ได้ทานข้าว'
+            : (l.food ? escapeHtml(l.food) : (l.tags && l.tags.length ? escapeHtml(l.tags.join(', ')) : 'ทานข้าวแล้ว'));
+          return `<div class="log-item"><div class="lday">วันที่ ${l.day}</div><div class="lfood">${detail}</div></div>`;
+        }).join('')}
+      </div>` : '';
     return `
     <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1}</span><span class="back-link" id="backToWeeks">‹ สัปดาห์ทั้งหมด</span></div>
     <div class="screen-content">
@@ -381,6 +419,7 @@ const builders = {
       <div class="progress-track"><div class="progress-fill" style="width:${(w.done/7*100)}%"></div></div>
       <div class="progress-label">${w.done}/7 วัน</div>
       <div class="day-grid">${cells}</div>
+      ${logsHtml}
       <div style="margin-top:auto;"></div>
       ${finished
         ? `<button class="big-btn" id="backToWeeks2">กลับไปหน้าสัปดาห์</button>`
@@ -406,10 +445,10 @@ const builders = {
     <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · บันทึกอาหาร</span><span class="back-link" id="backToCheckin">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">🍱</span><div class="h2">กินอะไรไปบ้าง?</div></div>
-      <input class="field" id="foodInput" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${ctx.foodText}" />
+      <input class="field" id="foodInput" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${escapeHtml(ctx.foodText)}" />
       <div class="field-label">หรือแตะเลือกจากรายการ</div>
       <div class="food-tags">
-        ${['ข้าวผัด','ผัดผัก','ไข่เจียว','ผลไม้','น้ำหวาน'].map(t=>`<div class="food-tag ${ctx.foodTags.includes(t)?'on':''}" data-tag="${t}">${t}</div>`).join('')}
+        ${['ข้าวผัด','ผัดผัก','ไข่เจียว','ผลไม้','น้ำหวาน'].map(t=>`<div class="food-tag ${ctx.foodTags.includes(t)?'on':''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
       </div>
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="saveFood">OK</button>
@@ -524,7 +563,7 @@ function bindInteractions(s){
         ctx.foodTags = []; ctx.foodText='';
         screenState='foodlog'; render();
       }else{
-        completeDay();
+        completeDay({ day: data.weeks[ctx.activeWeek].done+1, eaten:false, food:'', tags:[] });
       }
     });
   }
@@ -539,7 +578,7 @@ function bindInteractions(s){
     }));
     document.getElementById('saveFood').addEventListener('click', ()=>{
       ctx.foodText = document.getElementById('foodInput').value.trim();
-      completeDay();
+      completeDay({ day: data.weeks[ctx.activeWeek].done+1, eaten:true, food: ctx.foodText, tags: ctx.foodTags.slice() });
     });
   }
 
@@ -548,9 +587,12 @@ function bindInteractions(s){
   }
 }
 
-function completeDay(){
+function completeDay(entry){
   const w = data.weeks[ctx.activeWeek];
-  if(w.done<7) w.done++;
+  if(w.done<7){
+    w.done++;
+    w.logs.push(entry || { day: w.done, eaten: ctx.checkinEaten, food:'', tags:[] });
+  }
   saveData();
   screenState='dayDone';
   render();
