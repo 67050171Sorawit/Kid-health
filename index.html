@@ -38,7 +38,7 @@
   .page{
     flex:1; width:100%; max-width:1080px; margin:0 auto;
     display:flex; align-items:flex-start; justify-content:center; gap:56px;
-    padding:20px 24px 60px; flex-wrap:wrap;
+    padding:48px 24px 60px; flex-wrap:wrap;
   }
   .intro{
     flex:1 1 320px; max-width:420px; padding-top:26px;
@@ -173,13 +173,31 @@
   .done-hero .em{ font-size:56px; }
   .done-hero .h2{ margin-top:10px; }
 
-  .log-item{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; }
+  .log-item{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; cursor:pointer; transition:border-color .15s ease; }
+  .log-item:hover{ border-color:var(--coral); }
+  .log-item .ledit{ float:right; font-size:10px; color:var(--coral); font-weight:600; }
   .log-item .lday{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
   .log-item .lmeal{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
   .log-item .lex{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
 
   .status-toast{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px; min-height:14px; }
   footer{ margin-top:26px; font-size:11px; color:#6C9490; text-align:center; }
+  .admin-link{ cursor:pointer; text-decoration:underline; margin-left:8px; color:#88B3AE; }
+
+  .challenge-banner{ background:#fff; border:1.5px solid var(--yellow); border-radius:14px; padding:12px 14px; margin-top:12px; }
+  .challenge-banner .clabel{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
+  .challenge-banner .ctext{ font-family:'Baloo 2'; font-weight:700; font-size:14px; margin-top:2px; }
+
+  .wheel-wrap{ position:relative; width:220px; height:220px; margin:14px auto 6px; }
+  .wheel-pointer{ position:absolute; top:-12px; left:50%; transform:translateX(-50%); font-size:20px; color:var(--coral); z-index:3; filter:drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+  .wheel-disc{ width:100%; height:100%; border-radius:50%; position:relative; box-shadow:0 8px 24px rgba(0,0,0,.28), inset 0 0 0 6px #fff; }
+  .wheel-hub{ position:absolute; top:50%; left:50%; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .wheel-seg-label{ position:absolute; top:50%; left:50%; width:64px; margin-left:-32px; text-align:center; transform-origin:50% 0; font-size:9.5px; font-weight:700; color:#fff; line-height:1.2; text-shadow:0 1px 2px rgba(0,0,0,.35); }
+  .wheel-result{ font-family:'Baloo 2'; font-weight:700; font-size:15px; text-align:center; margin-top:16px; color:var(--ink); }
+
+  .admin-row{ padding:10px 14px; border-radius:12px; border:1.5px solid var(--line); background:#fff; margin-bottom:8px; }
+  .admin-row .aname{ font-family:'Baloo 2'; font-weight:700; font-size:12.5px; }
+  .admin-row .ameta{ font-size:10.5px; color:var(--ink-soft); margin-top:3px; }
 </style>
 </head>
 <body>
@@ -191,24 +209,12 @@
   </header>
 
   <main class="page">
-    <div class="intro">
-      <div class="eyebrow">แอปใช้งานจริง (เดโม)</div>
-      <h1>ชวนลูกน้อยสร้างนิสัยสุขภาพดี ทีละวัน</h1>
-      <p class="sub">ตอบคำถามความรู้เรื่องอาหาร เช็คอินทีละมื้อจนครบ 3 มื้อ และบันทึกการออกกำลังกายทุกวัน แล้วดูความคืบหน้าตลอด 4 สัปดาห์ ผ่านหน้าจอด้านขวานี้ได้เลย</p>
-      <ul class="feature-list">
-        <li><span class="dot"></span>แบบทดสอบความรู้เรื่องโภชนาการ</li>
-        <li><span class="dot"></span>เช็คอินทีละมื้อ + บันทึกอาหารที่กิน</li>
-        <li><span class="dot"></span>บันทึกการออกกำลังกายประจำวัน</li>
-        <li><span class="dot"></span>ติดตามความคืบหน้าครบ 4 สัปดาห์</li>
-      </ul>
-    </div>
-
     <div class="card-wrap">
       <div class="screen" id="screen"></div>
     </div>
   </main>
 
-  <footer>เวอร์ชันนี้เก็บข้อมูลแบบส่วนตัวในอุปกรณ์ของผู้ใช้แต่ละคน ยังไม่เชื่อมกับ LINE OA</footer>
+  <footer>เวอร์ชันนี้เก็บข้อมูลแบบส่วนตัวในอุปกรณ์ของผู้ใช้แต่ละคน ยังไม่เชื่อมกับ LINE OA<span class="admin-link" id="adminEntry">สำหรับแอดมิน</span></footer>
 
 <script>
 // ============ UTIL ============
@@ -232,17 +238,45 @@ function freshExercise(){
 
 // ============ STATE ============
 const STORAGE_KEY = 'kidhealth-profile-v1';
+const PLAYERS_INDEX_KEY = 'kidhealth-players-index';
+const ADMIN_PASSWORD = 'kidhealth2026'; // demo password for the admin dashboard
 const defaultState = {
   profile: { lang:'th', name:'', weight:'', height:'' },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
   weeks: [ { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] } ],
   onboarded: false,
+  playerId: null,
+  dailyChallenge: null, // { date:'YYYY-MM-DD', text:'...' }
 };
 let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
-let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise() };
+let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise(), wheel:null, adminPlayers:[] };
 
 const screenEl = document.getElementById('screen');
+
+function genPlayerId(){
+  return 'p_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
+}
+function todayStr(){
+  return new Date().toISOString().slice(0,10);
+}
+
+const wheelRewardSegments = [
+  { label:'เก่งมาก! 🌟', color:'#FF6B4A' },
+  { label:'สุดยอดไปเลย 💪', color:'#4ECDC4' },
+  { label:'นักสู้สุขภาพ 🏅', color:'#FFC857' },
+  { label:'ดาว 1 ดวง ⭐', color:'#FF6B4A' },
+  { label:'ยิ้มเก่งมาก 😄', color:'#4ECDC4' },
+  { label:'พลังเต็มร้อย 🔋', color:'#FFC857' },
+];
+const wheelChallengeSegments = [
+  { label:'ดื่มน้ำ 8 แก้ว 💧', color:'#FF6B4A' },
+  { label:'กระโดดเชือก 50 ครั้ง 🪢', color:'#4ECDC4' },
+  { label:'กินผัก 2 มื้อ 🥦', color:'#FFC857' },
+  { label:'เดินเล่น 15 นาที 🚶', color:'#FF6B4A' },
+  { label:'ยืดเส้นยืดสาย 5 นาที 🤸', color:'#4ECDC4' },
+  { label:'นอนก่อน 3 ทุ่ม 🌙', color:'#FFC857' },
+];
 
 async function loadData(){
   try{
@@ -256,7 +290,11 @@ async function loadData(){
   if(Array.isArray(data.weeks)){
     data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
   }
+  if(!data.playerId){
+    data.playerId = genPlayerId();
+  }
   screenState = data.onboarded ? 'weeks' : 'lang';
+  await saveData();
   render();
 }
 async function saveData(){
@@ -265,6 +303,59 @@ async function saveData(){
   }catch(e){
     console.error('save failed', e);
   }
+  syncPlayerRecord();
+}
+
+// Push a summary of this player's data to shared storage so the admin
+// dashboard (password protected) can see everyone who has played.
+async function syncPlayerRecord(){
+  if(!data.playerId) return;
+  const record = {
+    id: data.playerId,
+    name: data.profile.name || '',
+    weight: data.profile.weight || '',
+    height: data.profile.height || '',
+    quizScore: data.quiz.submitted ? data.quiz.score : null,
+    weeks: data.weeks.map(w=>w.done),
+    totalDays: data.weeks.reduce((sum,w)=>sum+w.done,0),
+    updatedAt: new Date().toISOString(),
+  };
+  try{
+    await window.storage.set('kidhealth-player:'+data.playerId, JSON.stringify(record), true);
+    let idx = [];
+    try{
+      const idxRes = await window.storage.get(PLAYERS_INDEX_KEY, true);
+      if(idxRes && idxRes.value) idx = JSON.parse(idxRes.value);
+    }catch(e){ /* index doesn't exist yet */ }
+    if(!idx.includes(data.playerId)){
+      idx.push(data.playerId);
+      await window.storage.set(PLAYERS_INDEX_KEY, JSON.stringify(idx), true);
+    }
+  }catch(e){
+    console.error('player sync failed', e);
+  }
+}
+
+async function loadAdminData(){
+  screenState = 'loading';
+  render();
+  let players = [];
+  try{
+    const idxRes = await window.storage.get(PLAYERS_INDEX_KEY, true);
+    const ids = (idxRes && idxRes.value) ? JSON.parse(idxRes.value) : [];
+    for(const id of ids){
+      try{
+        const r = await window.storage.get('kidhealth-player:'+id, true);
+        if(r && r.value) players.push(JSON.parse(r.value));
+      }catch(e){ /* skip missing record */ }
+    }
+  }catch(e){
+    console.error('load admin data failed', e);
+  }
+  players.sort((a,b)=> (b.totalDays||0) - (a.totalDays||0));
+  ctx.adminPlayers = players;
+  screenState = 'adminDashboard';
+  render();
 }
 
 const quizQuestions = [
@@ -393,11 +484,16 @@ const builders = {
         ${label}
       </div>`;
     }).join('');
+    const hasChallengeToday = data.dailyChallenge && data.dailyChallenge.date === todayStr();
+    const challengeHtml = hasChallengeToday
+      ? `<div class="challenge-banner"><div class="clabel">ภารกิจวันนี้</div><div class="ctext">🎯 ${escapeHtml(data.dailyChallenge.text)}</div></div>`
+      : `<button class="ghost-btn" id="toChallengeWheel" style="margin-top:12px;">🎯 หมุนสุ่มภารกิจประจำวัน</button>`;
     return `
     <div class="topbar"><span class="screen-tag">โปรแกรม</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${escapeHtml(data.profile.name) || 'เพื่อนนักสู้'}</div></div>
       <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
+      ${challengeHtml}
       <div class="week-list">${items}</div>
       <div style="margin-top:auto;"></div>
       <button class="ghost-btn" id="resetBtn">รีเซ็ตข้อมูลทั้งหมด</button>
@@ -415,9 +511,10 @@ const builders = {
     const finished = w.done>=7;
 
     const logsHtml = w.logs && w.logs.length ? `
-      <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา</div>
+      <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา (แตะเพื่อแก้ไข)</div>
       <div class="week-list" style="gap:6px;">
-        ${w.logs.slice().reverse().map(l=>{
+        ${w.logs.slice().reverse().map((l,revIdx)=>{
+          const origIdx = w.logs.length - 1 - revIdx;
           let mealLines;
           if(Array.isArray(l.meals)){
             mealLines = l.meals.map(m=>{
@@ -437,7 +534,8 @@ const builders = {
               ? `🏃 ${l.exercise.type ? escapeHtml(l.exercise.type) : 'ออกกำลังกาย'}${l.exercise.duration ? ' · ' + escapeHtml(l.exercise.duration) + ' นาที' : ''}`
               : '🏃 ไม่ได้ออกกำลังกาย';
           }
-          return `<div class="log-item"><div class="lday">วันที่ ${l.day}</div><div class="lmeal">${mealLines}</div>${exLine ? `<div class="lex">${exLine}</div>` : ''}</div>`;
+          const rewardLine = l.reward ? `<div class="lex">🎁 ${escapeHtml(l.reward)}</div>` : '';
+          return `<div class="log-item" data-log-idx="${origIdx}"><div class="lday">วันที่ ${l.day}<span class="ledit">✏️ แก้ไข</span></div><div class="lmeal">${mealLines}</div>${exLine ? `<div class="lex">${exLine}</div>` : ''}${rewardLine}</div>`;
         }).join('')}
       </div>` : '';
 
@@ -453,6 +551,48 @@ const builders = {
       ${finished
         ? `<button class="big-btn" id="backToWeeks2">กลับไปหน้าสัปดาห์</button>`
         : `<button class="big-btn" id="toCheckin">เช็คอินวันนี้</button>`}
+    </div>`;
+  },
+
+  editLog: () => {
+    const d = ctx.editDraft;
+    const mealsHtml = d.meals.map((m,mi)=>`
+      <div class="quiz-card">
+        <div class="quiz-q">${escapeHtml(mealNames[mi])}</div>
+        <div class="yn-row">
+          <button class="yn-btn yes ${m.eaten===true?'active':''}" data-meal-idx="${mi}" data-val="yes">Yes</button>
+          <button class="yn-btn no ${m.eaten===false?'active':''}" data-meal-idx="${mi}" data-val="no">No</button>
+        </div>
+        ${m.eaten===true ? `
+          <input class="field editFoodInput" data-meal-idx="${mi}" placeholder="พิมพ์เมนูอาหาร..." value="${escapeHtml(m.food)}" style="margin-top:10px;"/>
+          <div class="food-tags" style="margin-top:8px;">
+            ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-meal-idx="${mi}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
+          </div>` : ''}
+      </div>`).join('');
+    const ex = d.exercise;
+    const exerciseHtml = `
+      <div class="quiz-card">
+        <div class="quiz-q">ออกกำลังกาย</div>
+        <div class="yn-row">
+          <button class="yn-btn yes ${ex.done===true?'active':''}" id="editExYes">Yes</button>
+          <button class="yn-btn no ${ex.done===false?'active':''}" id="editExNo">No</button>
+        </div>
+        ${ex.done===true ? `
+          <div class="food-tags" style="margin-top:8px;">
+            ${exerciseTagOptions.map(t=>`<div class="food-tag ${ex.type===t?'on':''}" data-etag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
+          </div>
+          <input class="field" id="editDurationInput" type="number" placeholder="ระยะเวลา (นาที)" value="${escapeHtml(ex.duration)}" style="margin-top:8px;"/>` : ''}
+      </div>`;
+    return `
+    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · แก้ไข</span><span class="back-link" id="editCancel">‹ ยกเลิก</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">✏️</span><div class="h2">แก้ไขบันทึก วันที่ ${d.day}</div></div>
+      ${mealsHtml}
+      ${exerciseHtml}
+      <div class="error-msg" id="editErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="editSaveBtn">บันทึกการแก้ไข</button>
+      <button class="ghost-btn" id="editCancel2">ยกเลิก</button>
     </div>`;
   },
 
@@ -522,8 +662,76 @@ const builders = {
         <div class="h2">เก่งมาก! เช็คอินสำเร็จ</div>
         <div style="font-size:12.5px; color:var(--ink-soft); margin-top:6px;">วันนี้ทำสำเร็จแล้ว เจอกันพรุ่งนี้นะ</div>
       </div>
-      <button class="big-btn" id="backToWeekDetail2">กลับไปหน้า Week ${ctx.activeWeek+1}</button>
+      <button class="big-btn" id="toRewardWheel">🎁 หมุนวงล้อรับของรางวัล</button>
+      <button class="ghost-btn" id="backToWeekDetail2">กลับไปหน้า Week ${ctx.activeWeek+1}</button>
     </div>`,
+
+  wheel: () => {
+    const w = ctx.wheel;
+    const segs = w.segments;
+    const n = segs.length;
+    const sliceDeg = 360/n;
+    const gradientStops = segs.map((s,i)=> `${s.color} ${(i*sliceDeg).toFixed(2)}deg ${((i+1)*sliceDeg).toFixed(2)}deg`).join(', ');
+    const labelsHtml = segs.map((s,i)=>{
+      const mid = i*sliceDeg + sliceDeg/2;
+      return `<div class="wheel-seg-label" style="transform: rotate(${mid}deg) translateY(-88px);">${escapeHtml(s.label)}</div>`;
+    }).join('');
+    const isReward = w.mode==='reward';
+    const title = isReward ? 'หมุนวงล้อรับของรางวัล' : 'หมุนวงล้อภารกิจประจำวัน';
+    const icon = isReward ? '🎁' : '🎯';
+    const showBack = !isReward && !w.spun;
+    const resultLabel = (w.resultIndex!=null) ? segs[w.resultIndex].label : '';
+    return `
+    <div class="topbar"><span class="screen-tag">${isReward?'รางวัล':'ภารกิจวันนี้'}</span>${showBack ? '<span class="back-link" id="wheelBack">‹ ย้อนกลับ</span>' : ''}</div>
+    <div class="screen-content" style="align-items:center;">
+      <div class="title-row"><span class="icon">${icon}</span><div class="h2">${title}</div></div>
+      <div class="wheel-wrap">
+        <div class="wheel-pointer">▼</div>
+        <div class="wheel-disc" id="wheelDisc" style="background: conic-gradient(${gradientStops}); transform: rotate(${w.rotation||0}deg); transition:none;">
+          ${labelsHtml}
+          <div class="wheel-hub">${icon}</div>
+        </div>
+      </div>
+      ${w.resultIndex==null
+        ? `<button class="big-btn" id="spinBtn" style="margin-top:20px;" ${w.spinning?'disabled':''}>${w.spinning?'กำลังหมุน...':'หมุนเลย!'}</button>`
+        : `<div class="wheel-result">🎉 ได้รับ: ${escapeHtml(resultLabel)}</div>
+           <button class="big-btn" id="wheelDoneBtn" style="margin-top:14px;">${isReward?'กลับไปหน้า Week':'เริ่มภารกิจนี้'}</button>`}
+    </div>`;
+  },
+
+  adminLogin: () => `
+    <div class="screen-content" style="align-items:center;">
+      <div class="title-row"><span class="icon">🔐</span><div class="h2">เข้าสู่ระบบแอดมิน</div></div>
+      <div style="font-size:12px; color:var(--ink-soft); text-align:center; margin:6px 0 4px;">สำหรับผู้ปกครอง/ครูเท่านั้น</div>
+      <input class="field" id="adminPass" type="password" placeholder="รหัสผ่านแอดมิน" style="margin-top:14px;" />
+      <div class="error-msg" id="adminErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="adminLoginBtn">เข้าสู่ระบบ</button>
+      <button class="ghost-btn" id="adminCancelBtn">ยกเลิก</button>
+    </div>`,
+
+  adminDashboard: () => {
+    const players = ctx.adminPlayers || [];
+    const rows = players.length ? players.map(p=>{
+      const weeksStr = (p.weeks||[]).map((d,i)=>`W${i+1}: ${d}/7`).join(' · ');
+      const updated = p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}) : '-';
+      return `<div class="admin-row">
+        <div class="aname">${escapeHtml(p.name || '(ไม่ระบุชื่อ)')}</div>
+        <div class="ameta">น้ำหนัก ${escapeHtml(p.weight||'-')} กก. · ส่วนสูง ${escapeHtml(p.height||'-')} ซม. · ควิซ ${p.quizScore!=null ? p.quizScore+'/3' : '-'}</div>
+        <div class="ameta">${weeksStr || '-'} · รวม ${p.totalDays||0} วัน</div>
+        <div class="ameta" style="opacity:.7;">อัปเดตล่าสุด ${updated}</div>
+      </div>`;
+    }).join('') : `<div style="font-size:12.5px; color:var(--ink-soft); text-align:center; margin-top:24px;">ยังไม่มีข้อมูลผู้เล่น</div>`;
+    return `
+    <div class="topbar"><span class="screen-tag">แอดมิน</span><span class="back-link" id="adminLogout">‹ ออกจากระบบ</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">📊</span><div class="h2">ผู้เล่นทั้งหมด (${players.length})</div></div>
+      <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">ข้อมูลนี้แชร์ระหว่างผู้เล่นทุกคนที่ใช้แอปนี้</div>
+      <div style="max-height:400px; overflow-y:auto; margin-top:8px;">${rows}</div>
+      <div style="margin-top:auto;"></div>
+      <button class="ghost-btn" id="adminRefresh">รีเฟรชข้อมูล</button>
+    </div>`;
+  },
 };
 
 // ============ INTERACTIONS ============
@@ -592,8 +800,12 @@ function bindInteractions(s){
       ctx.activeWeek = parseInt(w.dataset.week);
       screenState='weekDetail'; render();
     }));
+    const challengeBtn = document.getElementById('toChallengeWheel');
+    if(challengeBtn) challengeBtn.addEventListener('click', ()=> openWheel('challenge'));
     document.getElementById('resetBtn').addEventListener('click', async ()=>{
+      const keepId = data.playerId;
       data = JSON.parse(JSON.stringify(defaultState));
+      data.playerId = keepId;
       await saveData();
       screenState='lang'; render();
     });
@@ -601,6 +813,9 @@ function bindInteractions(s){
 
   if(s==='weekDetail'){
     document.getElementById('backToWeeks').addEventListener('click', ()=>{ screenState='weeks'; render(); });
+    screenEl.querySelectorAll('.log-item[data-log-idx]').forEach(li=> li.addEventListener('click', ()=>{
+      openEditLog(ctx.activeWeek, parseInt(li.dataset.logIdx));
+    }));
     const finished = data.weeks[ctx.activeWeek].done>=7;
     if(finished){
       document.getElementById('backToWeeks2').addEventListener('click', ()=>{ screenState='weeks'; render(); });
@@ -665,8 +880,162 @@ function bindInteractions(s){
   }
 
   if(s==='dayDone'){
+    document.getElementById('toRewardWheel').addEventListener('click', ()=> openWheel('reward'));
     document.getElementById('backToWeekDetail2').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
   }
+
+  if(s==='wheel'){
+    const backBtn = document.getElementById('wheelBack');
+    if(backBtn) backBtn.addEventListener('click', ()=>{ screenState='weeks'; render(); });
+    const spinBtn = document.getElementById('spinBtn');
+    if(spinBtn) spinBtn.addEventListener('click', spinWheel);
+    const doneBtn = document.getElementById('wheelDoneBtn');
+    if(doneBtn) doneBtn.addEventListener('click', onWheelDone);
+  }
+
+  if(s==='adminLogin'){
+    document.getElementById('adminCancelBtn').addEventListener('click', ()=>{
+      screenState = data.onboarded ? 'weeks' : 'lang'; render();
+    });
+    document.getElementById('adminLoginBtn').addEventListener('click', ()=>{
+      const val = document.getElementById('adminPass').value;
+      if(val === ADMIN_PASSWORD){
+        loadAdminData();
+      }else{
+        document.getElementById('adminErr').textContent = 'รหัสผ่านไม่ถูกต้อง';
+      }
+    });
+  }
+
+  if(s==='editLog'){
+    document.getElementById('editCancel').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
+    document.getElementById('editCancel2').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
+
+    screenEl.querySelectorAll('.yn-btn[data-meal-idx]').forEach(b=> b.addEventListener('click', ()=>{
+      const mi = parseInt(b.dataset.mealIdx);
+      ctx.editDraft.meals[mi].eaten = b.dataset.val==='yes';
+      render();
+    }));
+    screenEl.querySelectorAll('.editFoodInput').forEach(inp=> inp.addEventListener('input', ()=>{
+      const mi = parseInt(inp.dataset.mealIdx);
+      ctx.editDraft.meals[mi].food = inp.value;
+    }));
+    screenEl.querySelectorAll('.food-tag[data-meal-idx]').forEach(t=> t.addEventListener('click', ()=>{
+      const mi = parseInt(t.dataset.mealIdx);
+      const tag = t.dataset.tag;
+      const tags = ctx.editDraft.meals[mi].tags;
+      ctx.editDraft.meals[mi].tags = tags.includes(tag) ? tags.filter(x=>x!==tag) : [...tags, tag];
+      render();
+    }));
+
+    document.getElementById('editExYes').addEventListener('click', ()=>{ ctx.editDraft.exercise.done = true; render(); });
+    document.getElementById('editExNo').addEventListener('click', ()=>{ ctx.editDraft.exercise.done = false; render(); });
+    screenEl.querySelectorAll('[data-etag]').forEach(t=> t.addEventListener('click', ()=>{
+      const tag = t.dataset.etag;
+      ctx.editDraft.exercise.type = (ctx.editDraft.exercise.type===tag) ? '' : tag;
+      render();
+    }));
+    const editDurInp = document.getElementById('editDurationInput');
+    if(editDurInp) editDurInp.addEventListener('input', ()=>{ ctx.editDraft.exercise.duration = editDurInp.value; });
+
+    document.getElementById('editSaveBtn').addEventListener('click', ()=>{
+      const d = ctx.editDraft;
+      const incomplete = d.meals.some(m=> m.eaten===null) || d.exercise.done===null;
+      if(incomplete){
+        document.getElementById('editErr').textContent = 'กรุณาตอบให้ครบทุกมื้อและออกกำลังกายก่อนบันทึก';
+        return;
+      }
+      if(editDurInp) d.exercise.duration = editDurInp.value.trim();
+      const wk = data.weeks[ctx.editWeek];
+      wk.logs[ctx.editLogIndex] = {
+        day: d.day,
+        meals: d.meals.map((m,mi)=>({ name: mealNames[mi], eaten:m.eaten, food:m.food, tags:m.tags.slice() })),
+        exercise: { done:d.exercise.done, type:d.exercise.type, duration:d.exercise.duration },
+        reward: d.reward,
+      };
+      saveData();
+      screenState='weekDetail';
+      render();
+    });
+  }
+}
+
+function openEditLog(weekIndex, logIndex){
+  const log = data.weeks[weekIndex].logs[logIndex];
+  const meals = Array.isArray(log.meals)
+    ? log.meals.map(m=>({ eaten: m.eaten ?? null, food: m.food || '', tags: (m.tags||[]).slice() }))
+    : mealNames.map(()=>({ eaten: log.eaten ?? null, food: log.food || '', tags: (log.tags||[]).slice() }));
+  ctx.editWeek = weekIndex;
+  ctx.editLogIndex = logIndex;
+  ctx.editDraft = {
+    day: log.day,
+    meals,
+    exercise: {
+      done: log.exercise ? (log.exercise.done ?? null) : null,
+      type: log.exercise ? (log.exercise.type || '') : '',
+      duration: log.exercise ? (log.exercise.duration || '') : '',
+    },
+    reward: log.reward || null,
+  };
+  screenState = 'editLog';
+  render();
+}
+
+// ============ WHEEL LOGIC ============
+function openWheel(mode){
+  const segments = mode==='reward' ? wheelRewardSegments : wheelChallengeSegments;
+  ctx.wheel = { mode, segments, spinning:false, resultIndex:null, rotation:0, spun:false };
+  screenState = 'wheel';
+  render();
+}
+
+function spinWheel(){
+  if(!ctx.wheel || ctx.wheel.spinning) return;
+  const segs = ctx.wheel.segments;
+  const n = segs.length;
+  const sliceDeg = 360/n;
+  const targetIndex = Math.floor(Math.random()*n);
+  const mid = targetIndex*sliceDeg + sliceDeg/2;
+  const jitter = (Math.random()-0.5)*sliceDeg*0.5;
+  const finalRotation = 360*5 - (mid + jitter);
+
+  ctx.wheel.spinning = true;
+  render();
+
+  const discEl = document.getElementById('wheelDisc');
+  if(discEl){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        discEl.style.transition = 'transform 3.2s cubic-bezier(.17,.67,.32,1)';
+        discEl.style.transform = `rotate(${finalRotation}deg)`;
+      });
+    });
+  }
+
+  setTimeout(()=>{
+    ctx.wheel.spinning = false;
+    ctx.wheel.resultIndex = targetIndex;
+    ctx.wheel.rotation = finalRotation;
+    ctx.wheel.spun = true;
+    render();
+  }, 3300);
+}
+
+function onWheelDone(){
+  const w = ctx.wheel;
+  if(!w || w.resultIndex==null) return;
+  const label = w.segments[w.resultIndex].label;
+  if(w.mode==='reward'){
+    const wk = data.weeks[ctx.activeWeek];
+    if(wk.logs.length){ wk.logs[wk.logs.length-1].reward = label; }
+    saveData();
+    screenState = 'weekDetail';
+  }else{
+    data.dailyChallenge = { date: todayStr(), text: label };
+    saveData();
+    screenState = 'weeks';
+  }
+  render();
 }
 
 function advanceMeal(){
@@ -692,6 +1061,11 @@ function finishDay(){
   screenState='dayDone';
   render();
 }
+
+document.getElementById('adminEntry').addEventListener('click', ()=>{
+  screenState = 'adminLogin';
+  render();
+});
 
 loadData();
 </script>
