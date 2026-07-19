@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg-deep:#0F3D3E; --bg-deep-2:#0B2D2E;
@@ -453,6 +454,93 @@ async function loadAdminData(){
   render();
 }
 
+// Pulls the FULL data document (profile, quiz, weekly logs) for every
+// player from the 'users' collection and builds a two-sheet Excel file:
+// one row per player (summary) and one row per logged day (detail).
+async function exportAdminExcel(){
+  const statusEl = document.getElementById('adminExportStatus');
+  const btn = document.getElementById('adminExport');
+  if(btn) btn.disabled = true;
+  if(statusEl) statusEl.textContent = 'กำลังรวบรวมข้อมูลผู้เล่นทุกคน...';
+
+  try{
+    const snap = await db.collection('users').get();
+    const summaryRows = [];
+    const detailRows = [];
+
+    snap.forEach(doc=>{
+      const rec = doc.data() || {};
+      const username = rec.username || doc.id;
+      const d = rec.data || {};
+      const profile = d.profile || {};
+      const quiz = d.quiz || {};
+      const weeks = Array.isArray(d.weeks) ? d.weeks : [];
+      const totalDays = weeks.reduce((sum,w)=> sum + (w.done||0), 0);
+      const today = todayStr();
+
+      summaryRows.push({
+        'ชื่อผู้ใช้': username,
+        'ชื่อ-นามสกุล': profile.name || '',
+        'น้ำหนัก (กก.)': profile.weight || '',
+        'ส่วนสูง (ซม.)': profile.height || '',
+        'คะแนนควิซ': quiz.submitted ? `${quiz.score}/3` : 'ยังไม่ทำ',
+        'Week 1 (วัน)': weeks[0] ? weeks[0].done : 0,
+        'Week 2 (วัน)': weeks[1] ? weeks[1].done : 0,
+        'Week 3 (วัน)': weeks[2] ? weeks[2].done : 0,
+        'Week 4 (วัน)': weeks[3] ? weeks[3].done : 0,
+        'รวมวันทั้งหมด': totalDays,
+        'ภารกิจออกกำลังกายวันนี้': (d.dailyChallenge && d.dailyChallenge.date===today) ? d.dailyChallenge.text : '',
+        'เมนูอาหารแนะนำวันนี้': (d.dailyFood && d.dailyFood.date===today) ? d.dailyFood.text : '',
+      });
+
+      weeks.forEach((w, wi)=>{
+        (w.logs||[]).forEach(log=>{
+          const mealsArr = Array.isArray(log.meals)
+            ? log.meals
+            : mealNames.map(nm=>({ name:nm, eaten: log.eaten, food: log.food, tags: log.tags||[] }));
+          const mealSummary = mealsArr.map(m=>{
+            const detail = m.eaten
+              ? (m.food || (m.tags && m.tags.length ? m.tags.join(', ') : 'ทานแล้ว'))
+              : 'ไม่ได้ทาน';
+            return `${m.name}: ${detail}`;
+          }).join(' | ');
+          const ex = log.exercise || {};
+          const exSummary = ex.done
+            ? `${ex.type || 'ออกกำลังกาย'}${ex.duration ? ' (' + ex.duration + ' นาที)' : ''}`
+            : 'ไม่ได้ออกกำลังกาย';
+
+          detailRows.push({
+            'ชื่อผู้ใช้': username,
+            'ชื่อ-นามสกุล': profile.name || '',
+            'สัปดาห์': wi+1,
+            'วันที่ (ลำดับในสัปดาห์)': log.day,
+            'มื้ออาหาร': mealSummary,
+            'ออกกำลังกาย': exSummary,
+            'รางวัลที่ได้รับ': log.reward || '',
+          });
+        });
+      });
+    });
+
+    if(!summaryRows.length){
+      if(statusEl) statusEl.textContent = 'ยังไม่มีข้อมูลผู้เล่นให้ส่งออก';
+      if(btn) btn.disabled = false;
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'สรุปผู้เล่น');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailRows), 'รายละเอียดรายวัน');
+    XLSX.writeFile(wb, `kid-health-export-${todayStr()}.xlsx`);
+
+    if(statusEl) statusEl.textContent = `ดาวน์โหลดสำเร็จ! (${summaryRows.length} คน, ${detailRows.length} รายการ)`;
+  }catch(e){
+    console.error('export to excel failed', e);
+    if(statusEl) statusEl.textContent = 'ดึงข้อมูลไม่สำเร็จ ลองใหม่อีกครั้งนะ';
+  }
+  if(btn) btn.disabled = false;
+}
+
 const quizQuestions = [
   {
     q:"มื้อไหนมีประโยชน์กับร่างกายมากที่สุด?",
@@ -865,7 +953,9 @@ const builders = {
       <div class="title-row"><span class="icon">📊</span><div class="h2">ผู้เล่นทั้งหมด (${players.length})</div></div>
       <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">ข้อมูลนี้แชร์ระหว่างผู้เล่นทุกคนที่ใช้แอปนี้</div>
       <div style="max-height:400px; overflow-y:auto; margin-top:8px;">${rows}</div>
+      <div class="status-toast" id="adminExportStatus"></div>
       <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="adminExport" ${players.length ? '' : 'disabled'}>📊 ดาวน์โหลด Excel</button>
       <button class="ghost-btn" id="adminRefresh">รีเฟรชข้อมูล</button>
     </div>`;
   },
@@ -1086,6 +1176,15 @@ function bindInteractions(s){
         document.getElementById('adminErr').textContent = 'รหัสผ่านไม่ถูกต้อง';
       }
     });
+  }
+
+  if(s==='adminDashboard'){
+    document.getElementById('adminLogout').addEventListener('click', ()=>{
+      screenState = data.onboarded ? 'weeks' : 'lang'; render();
+    });
+    document.getElementById('adminRefresh').addEventListener('click', loadAdminData);
+    const exportBtn = document.getElementById('adminExport');
+    if(exportBtn) exportBtn.addEventListener('click', exportAdminExcel);
   }
 
   if(s==='editLog'){
