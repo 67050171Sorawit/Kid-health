@@ -426,8 +426,13 @@ async function syncPlayerRecord(){
   const record = {
     id: currentUid,
     name: data.profile.name || '',
+    weight: data.profile.weight || '',
+    height: data.profile.height || '',
     quizScore: data.quiz.submitted ? data.quiz.score : null,
     weeks: data.weeks.map(w=>w.done),
+    weeksDetail: data.weeks.map(w=> (w.logs||[])), // full day-by-day logs, per week
+    dailyChallenge: data.dailyChallenge || null,
+    dailyFood: data.dailyFood || null,
     totalDays: data.weeks.reduce((sum,w)=>sum+w.done,0),
     updatedAt: new Date().toISOString(),
   };
@@ -454,47 +459,49 @@ async function loadAdminData(){
   render();
 }
 
-// Pulls the FULL data document (profile, quiz, weekly logs) for every
-// player from the 'users' collection and builds a two-sheet Excel file:
-// one row per player (summary) and one row per logged day (detail).
-async function exportAdminExcel(){
+// Builds a two-sheet Excel file from the already-loaded public_summary
+// data (ctx.adminPlayers): one row per player (summary) and one row per
+// logged day (detail). Uses public_summary rather than the 'users'
+// collection because 'users' is typically locked down per-owner while
+// public_summary is the collection the admin view is allowed to read.
+function exportAdminExcel(){
   const statusEl = document.getElementById('adminExportStatus');
   const btn = document.getElementById('adminExport');
   if(btn) btn.disabled = true;
-  if(statusEl) statusEl.textContent = 'กำลังรวบรวมข้อมูลผู้เล่นทุกคน...';
+  if(statusEl) statusEl.textContent = 'กำลังสร้างไฟล์ Excel...';
 
   try{
-    const snap = await db.collection('users').get();
+    const players = ctx.adminPlayers || [];
+    if(!players.length){
+      if(statusEl) statusEl.textContent = 'ยังไม่มีข้อมูลผู้เล่นให้ส่งออก';
+      if(btn) btn.disabled = false;
+      return;
+    }
+    const today = todayStr();
     const summaryRows = [];
     const detailRows = [];
 
-    snap.forEach(doc=>{
-      const rec = doc.data() || {};
-      const username = rec.username || doc.id;
-      const d = rec.data || {};
-      const profile = d.profile || {};
-      const quiz = d.quiz || {};
-      const weeks = Array.isArray(d.weeks) ? d.weeks : [];
-      const totalDays = weeks.reduce((sum,w)=> sum + (w.done||0), 0);
-      const today = todayStr();
+    players.forEach(p=>{
+      const weeks = Array.isArray(p.weeks) ? p.weeks : [];
+      const weeksDetail = Array.isArray(p.weeksDetail) ? p.weeksDetail : [];
 
       summaryRows.push({
-        'ชื่อผู้ใช้': username,
-        'ชื่อ-นามสกุล': profile.name || '',
-        'น้ำหนัก (กก.)': profile.weight || '',
-        'ส่วนสูง (ซม.)': profile.height || '',
-        'คะแนนควิซ': quiz.submitted ? `${quiz.score}/3` : 'ยังไม่ทำ',
-        'Week 1 (วัน)': weeks[0] ? weeks[0].done : 0,
-        'Week 2 (วัน)': weeks[1] ? weeks[1].done : 0,
-        'Week 3 (วัน)': weeks[2] ? weeks[2].done : 0,
-        'Week 4 (วัน)': weeks[3] ? weeks[3].done : 0,
-        'รวมวันทั้งหมด': totalDays,
-        'ภารกิจออกกำลังกายวันนี้': (d.dailyChallenge && d.dailyChallenge.date===today) ? d.dailyChallenge.text : '',
-        'เมนูอาหารแนะนำวันนี้': (d.dailyFood && d.dailyFood.date===today) ? d.dailyFood.text : '',
+        'ชื่อ-นามสกุล': p.name || '(ไม่ระบุชื่อ)',
+        'น้ำหนัก (กก.)': p.weight || '',
+        'ส่วนสูง (ซม.)': p.height || '',
+        'คะแนนควิซ': p.quizScore!=null ? `${p.quizScore}/3` : 'ยังไม่ทำ',
+        'Week 1 (วัน)': weeks[0] || 0,
+        'Week 2 (วัน)': weeks[1] || 0,
+        'Week 3 (วัน)': weeks[2] || 0,
+        'Week 4 (วัน)': weeks[3] || 0,
+        'รวมวันทั้งหมด': p.totalDays || 0,
+        'ภารกิจออกกำลังกายวันนี้': (p.dailyChallenge && p.dailyChallenge.date===today) ? p.dailyChallenge.text : '',
+        'เมนูอาหารแนะนำวันนี้': (p.dailyFood && p.dailyFood.date===today) ? p.dailyFood.text : '',
+        'อัปเดตล่าสุด': p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH') : '',
       });
 
-      weeks.forEach((w, wi)=>{
-        (w.logs||[]).forEach(log=>{
+      weeksDetail.forEach((logs, wi)=>{
+        (logs||[]).forEach(log=>{
           const mealsArr = Array.isArray(log.meals)
             ? log.meals
             : mealNames.map(nm=>({ name:nm, eaten: log.eaten, food: log.food, tags: log.tags||[] }));
@@ -510,8 +517,7 @@ async function exportAdminExcel(){
             : 'ไม่ได้ออกกำลังกาย';
 
           detailRows.push({
-            'ชื่อผู้ใช้': username,
-            'ชื่อ-นามสกุล': profile.name || '',
+            'ชื่อ-นามสกุล': p.name || '(ไม่ระบุชื่อ)',
             'สัปดาห์': wi+1,
             'วันที่ (ลำดับในสัปดาห์)': log.day,
             'มื้ออาหาร': mealSummary,
@@ -522,21 +528,15 @@ async function exportAdminExcel(){
       });
     });
 
-    if(!summaryRows.length){
-      if(statusEl) statusEl.textContent = 'ยังไม่มีข้อมูลผู้เล่นให้ส่งออก';
-      if(btn) btn.disabled = false;
-      return;
-    }
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), 'สรุปผู้เล่น');
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailRows), 'รายละเอียดรายวัน');
-    XLSX.writeFile(wb, `kid-health-export-${todayStr()}.xlsx`);
+    XLSX.writeFile(wb, `kid-health-export-${today}.xlsx`);
 
     if(statusEl) statusEl.textContent = `ดาวน์โหลดสำเร็จ! (${summaryRows.length} คน, ${detailRows.length} รายการ)`;
   }catch(e){
     console.error('export to excel failed', e);
-    if(statusEl) statusEl.textContent = 'ดึงข้อมูลไม่สำเร็จ ลองใหม่อีกครั้งนะ';
+    if(statusEl) statusEl.textContent = 'ดึงข้อมูลไม่สำเร็จ: ' + (e && e.message ? e.message : 'ข้อผิดพลาดไม่ทราบสาเหตุ');
   }
   if(btn) btn.disabled = false;
 }
