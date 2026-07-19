@@ -275,6 +275,21 @@ function usernameToEmail(username){
 
 const PLAYERS_INDEX_KEY = 'kidhealth-players-index'; // unused with Firebase, kept for reference
 const ADMIN_PASSWORD = 'kidhealth2026'; // demo password for the admin dashboard (UI-level gate only)
+
+// ---- Google Sheets real-time sync (optional) ----
+// This pushes every player's data to a Google Sheet the moment it changes
+// (check-in, quiz, wheel spin, etc.) so the sheet is always live/current —
+// no manual export needed. Setup steps are in google-sheets-setup.md:
+//   1) Create a Google Sheet, open Extensions > Apps Script, paste the
+//      provided Code.gs, and deploy it as a Web App ("Anyone" access).
+//   2) Paste the deployment's /exec URL below as GOOGLE_SHEETS_WEBAPP_URL.
+//   3) Paste the sheet's normal share URL below as GOOGLE_SHEETS_VIEW_URL
+//      (this just powers the "Open Google Sheets" button in the admin page).
+// Leave both blank to disable — the app works fine without this, you'll
+// just use the manual "Download Excel" button in the admin dashboard instead.
+const GOOGLE_SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzby4xhyZm6jkWylXwq92Nkh86BzLqBq83bJy_vabL_oDamtCLR4DnDON_HBJVbVXQPcQ/exec'; // e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
+const GOOGLE_SHEETS_VIEW_URL = 'https://docs.google.com/spreadsheets/d/1_xHHm0vTdlFpyKIF-LTu4ejtgUPWVo4gAkdQ7YRkwAE/edit?gid=0#gid=0';   // e.g. 'https://docs.google.com/spreadsheets/d/XXXXX/edit'
+
 const defaultState = {
   profile: { lang:'th', name:'', weight:'', height:'' },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
@@ -425,6 +440,7 @@ async function syncPlayerRecord(){
   if(!currentUid) return;
   const record = {
     id: currentUid,
+    username: currentUsername,
     name: data.profile.name || '',
     weight: data.profile.weight || '',
     height: data.profile.height || '',
@@ -440,6 +456,26 @@ async function syncPlayerRecord(){
     await db.collection('public_summary').doc(currentUid).set(record);
   }catch(e){
     console.error('player sync failed', e);
+  }
+  pushToGoogleSheets(record); // fire-and-forget real-time sync, no-op if not configured
+}
+
+// Sends this player's latest record to the Google Sheets Web App so the
+// sheet reflects it immediately. Uses mode:'no-cors' + text/plain so the
+// browser sends it as a "simple request" (Apps Script can't answer CORS
+// preflight requests), which means we can't read a response — that's fine,
+// this is intentionally fire-and-forget so it never blocks the UI.
+function pushToGoogleSheets(record){
+  if(!GOOGLE_SHEETS_WEBAPP_URL) return;
+  try{
+    fetch(GOOGLE_SHEETS_WEBAPP_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(record),
+    }).catch(e=> console.error('google sheets sync failed', e));
+  }catch(e){
+    console.error('google sheets sync failed', e);
   }
 }
 
@@ -947,15 +983,21 @@ const builders = {
         <div class="ameta" style="opacity:.7;">อัปเดตล่าสุด ${updated}</div>
       </div>`;
     }).join('') : `<div style="font-size:12.5px; color:var(--ink-soft); text-align:center; margin-top:24px;">ยังไม่มีข้อมูลผู้เล่น</div>`;
+    const sheetsConfigured = !!GOOGLE_SHEETS_VIEW_URL;
+    const sheetsBanner = sheetsConfigured
+      ? `<div class="challenge-banner food"><div class="clabel">ซิงค์เรียลไทม์</div><div class="ctext">🔗 ข้อมูลอัปเดตอัตโนมัติไปที่ Google Sheets ทุกครั้งที่มีการบันทึก</div></div>`
+      : `<div class="challenge-banner"><div class="clabel">ยังไม่ได้ตั้งค่า</div><div class="ctext" style="font-size:11.5px;">ยังไม่ได้เชื่อม Google Sheets แบบเรียลไทม์ — ดูวิธีตั้งค่าใน google-sheets-setup.md แล้วใส่ URL ที่ GOOGLE_SHEETS_WEBAPP_URL / GOOGLE_SHEETS_VIEW_URL ในโค้ด</div></div>`;
     return `
     <div class="topbar"><span class="screen-tag">แอดมิน</span><span class="back-link" id="adminLogout">‹ ออกจากระบบ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📊</span><div class="h2">ผู้เล่นทั้งหมด (${players.length})</div></div>
       <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">ข้อมูลนี้แชร์ระหว่างผู้เล่นทุกคนที่ใช้แอปนี้</div>
-      <div style="max-height:400px; overflow-y:auto; margin-top:8px;">${rows}</div>
+      ${sheetsBanner}
+      <div style="max-height:340px; overflow-y:auto; margin-top:8px;">${rows}</div>
       <div class="status-toast" id="adminExportStatus"></div>
       <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="adminExport" ${players.length ? '' : 'disabled'}>📊 ดาวน์โหลด Excel</button>
+      ${sheetsConfigured ? `<button class="big-btn" id="adminOpenSheets">🔗 เปิด Google Sheets (เรียลไทม์)</button>` : ''}
+      <button class="${sheetsConfigured ? 'ghost-btn' : 'big-btn'}" id="adminExport" ${players.length ? '' : 'disabled'}>📊 ดาวน์โหลด Excel (สแนปช็อตล่าสุด)</button>
       <button class="ghost-btn" id="adminRefresh">รีเฟรชข้อมูล</button>
     </div>`;
   },
@@ -1185,6 +1227,10 @@ function bindInteractions(s){
     document.getElementById('adminRefresh').addEventListener('click', loadAdminData);
     const exportBtn = document.getElementById('adminExport');
     if(exportBtn) exportBtn.addEventListener('click', exportAdminExcel);
+    const openSheetsBtn = document.getElementById('adminOpenSheets');
+    if(openSheetsBtn) openSheetsBtn.addEventListener('click', ()=>{
+      window.open(GOOGLE_SHEETS_VIEW_URL, '_blank', 'noopener');
+    });
   }
 
   if(s==='editLog'){
