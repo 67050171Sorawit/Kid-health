@@ -479,6 +479,38 @@ function pushToGoogleSheets(record){
   }
 }
 
+// One-time backfill: pushes EVERY already-loaded player (ctx.adminPlayers,
+// from public_summary) to Google Sheets. Needed because the automatic sync
+// only fires going forward from the moment it was configured — data saved
+// before that was never sent to the sheet. Staggered 400ms apart so we
+// don't fire 20+ simultaneous requests at Apps Script's execution quota.
+function syncAllToGoogleSheets(){
+  const statusEl = document.getElementById('adminExportStatus');
+  const btn = document.getElementById('adminSyncAll');
+  if(!GOOGLE_SHEETS_WEBAPP_URL){
+    if(statusEl) statusEl.textContent = 'ยังไม่ได้ตั้งค่า Google Sheets (ดู google-sheets-setup.md)';
+    return;
+  }
+  const players = ctx.adminPlayers || [];
+  if(!players.length){
+    if(statusEl) statusEl.textContent = 'ยังไม่มีข้อมูลผู้เล่นให้ซิงค์';
+    return;
+  }
+  if(btn) btn.disabled = true;
+  let sent = 0;
+  players.forEach((p, i)=>{
+    setTimeout(()=>{
+      pushToGoogleSheets(p);
+      sent++;
+      if(statusEl) statusEl.textContent = `กำลังซิงค์... (${sent}/${players.length})`;
+      if(sent === players.length){
+        if(statusEl) statusEl.textContent = `ซิงค์ข้อมูลเดิมทั้งหมดไปที่ Sheets แล้ว (${players.length} คน) — เช็คในชีตได้เลย`;
+        if(btn) btn.disabled = false;
+      }
+    }, i * 400);
+  });
+}
+
 async function loadAdminData(){
   screenState = 'loading';
   render();
@@ -997,6 +1029,7 @@ const builders = {
       <div class="status-toast" id="adminExportStatus"></div>
       <div style="margin-top:auto;"></div>
       ${sheetsConfigured ? `<button class="big-btn" id="adminOpenSheets">🔗 เปิด Google Sheets (เรียลไทม์)</button>` : ''}
+      ${sheetsConfigured ? `<button class="ghost-btn" id="adminSyncAll">🔄 ซิงค์ข้อมูลเดิมทั้งหมดไปที่ Sheets</button>` : ''}
       <button class="${sheetsConfigured ? 'ghost-btn' : 'big-btn'}" id="adminExport" ${players.length ? '' : 'disabled'}>📊 ดาวน์โหลด Excel (สแนปช็อตล่าสุด)</button>
       <button class="ghost-btn" id="adminRefresh">รีเฟรชข้อมูล</button>
     </div>`;
@@ -1231,6 +1264,8 @@ function bindInteractions(s){
     if(openSheetsBtn) openSheetsBtn.addEventListener('click', ()=>{
       window.open(GOOGLE_SHEETS_VIEW_URL, '_blank', 'noopener');
     });
+    const syncAllBtn = document.getElementById('adminSyncAll');
+    if(syncAllBtn) syncAllBtn.addEventListener('click', syncAllToGoogleSheets);
   }
 
   if(s==='editLog'){
