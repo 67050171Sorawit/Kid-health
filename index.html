@@ -759,6 +759,7 @@ const builders = {
       <div class="food-tags">
         ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
       </div>
+      <div class="error-msg" id="foodErr"></div>
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="mealNext">${ctx.mealIndex < mealNames.length-1 ? 'ถัดไป' : 'ถัดไป: ออกกำลังกาย'}</button>
     </div>`;
@@ -1029,7 +1030,13 @@ function bindInteractions(s){
       render();
     }));
     document.getElementById('mealNext').addEventListener('click', ()=>{
-      ctx.meals[ctx.mealIndex].food = document.getElementById('foodInput').value.trim();
+      const food = document.getElementById('foodInput').value.trim();
+      const hasTags = ctx.meals[ctx.mealIndex].tags.length > 0;
+      if(!food && !hasTags){
+        document.getElementById('foodErr').textContent = 'พิมพ์เมนูอาหาร หรือแตะเลือกจากรายการก่อนนะ';
+        return;
+      }
+      ctx.meals[ctx.mealIndex].food = food;
       advanceMeal();
     });
   }
@@ -1117,6 +1124,11 @@ function bindInteractions(s){
       const incomplete = d.meals.some(m=> m.eaten===null) || d.exercise.done===null;
       if(incomplete){
         document.getElementById('editErr').textContent = 'กรุณาตอบให้ครบทุกมื้อและออกกำลังกายก่อนบันทึก';
+        return;
+      }
+      const missingFood = d.meals.some(m=> m.eaten===true && !m.food.trim() && m.tags.length===0);
+      if(missingFood){
+        document.getElementById('editErr').textContent = 'กรุณาพิมพ์เมนูอาหาร หรือเลือกจากรายการให้ครบทุกมื้อที่ทานก่อนบันทึก';
         return;
       }
       if(editDurInp) d.exercise.duration = editDurInp.value.trim();
