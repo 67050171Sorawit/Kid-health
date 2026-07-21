@@ -20,7 +20,7 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{ height:100%; }
   body{
-    margin:0; min-height:100vh;
+    margin:0; height:100vh; height:100dvh; overflow:hidden;
     background:
       radial-gradient(circle at 12% -10%, rgba(255,200,87,.18), transparent 42%),
       radial-gradient(circle at 110% 15%, rgba(78,205,196,.18), transparent 40%),
@@ -32,41 +32,32 @@
 
   .site-header{
     display:flex; align-items:center; justify-content:space-between;
-    padding:18px 24px; max-width:1080px; width:100%; margin:0 auto;
+    padding:12px 20px; width:100%; margin:0; flex:0 0 auto;
   }
   .brand{ display:flex; align-items:center; gap:10px; }
-  .brand .logo{ font-size:24px; }
-  .brand .name{ font-family:'Baloo 2'; font-weight:800; font-size:17px; color:var(--cream); }
-  .brand .name small{ display:block; font-size:10px; font-weight:500; color:var(--mint); letter-spacing:.08em; text-transform:uppercase; }
+  .brand .logo{ font-size:22px; }
+  .brand .name{ font-family:'Baloo 2'; font-weight:800; font-size:16px; color:var(--ink); }
+  .brand .name small{ display:block; font-size:10px; font-weight:500; color:#2C7A72; letter-spacing:.08em; text-transform:uppercase; }
 
   .page{
-    flex:1; width:100%; max-width:1080px; margin:0 auto;
-    display:flex; align-items:flex-start; justify-content:center; gap:56px;
-    padding:48px 24px 60px; flex-wrap:wrap;
+    flex:1 1 auto; min-height:0; width:100%; max-width:none; margin:0;
+    display:flex; align-items:stretch; justify-content:center; gap:0;
+    padding:0 0 0; flex-wrap:nowrap;
   }
-  .intro{
-    flex:1 1 320px; max-width:420px; padding-top:26px;
-  }
-  .eyebrow{font-size:12.5px; letter-spacing:.14em; color:var(--mint); text-transform:uppercase; font-weight:600;}
-  h1{font-family:'Baloo 2',sans-serif; font-weight:800; font-size:clamp(28px,4.2vw,40px); margin:8px 0 12px; line-height:1.15;}
-  .sub{color:#BFE3DF; font-size:15px; max-width:380px; margin:0 0 20px; line-height:1.7;}
-  .feature-list{ list-style:none; padding:0; margin:22px 0 0; display:flex; flex-direction:column; gap:12px; }
-  .feature-list li{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:#D9EFEC; }
-  .feature-list .dot{ width:7px; height:7px; border-radius:50%; background:var(--yellow); flex-shrink:0; }
-
-  .card-wrap{ flex:0 0 380px; width:100%; max-width:380px; }
+  .intro{ display:none; }
+  .card-wrap{ flex:1 1 auto; width:100%; max-width:none; height:100%; min-height:0; }
 
   .screen{
-    width:100%; min-height:560px;
+    width:100%; height:100%; min-height:0;
     background:var(--cream);
-    border-radius:28px;
+    border-radius:0;
     overflow:hidden;
     position:relative;
     display:flex; flex-direction:column;
-    box-shadow:0 25px 60px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.4);
+    box-shadow:none;
   }
   .screen-content{
-    flex:1;
+    flex:1; min-height:0; overflow-y:auto;
     display:flex; flex-direction:column;
     padding:44px 26px 26px;
     color:var(--ink);
@@ -79,11 +70,7 @@
   .back-link{ font-size:12px; color:var(--coral); font-weight:600; cursor:pointer; }
 
   @media (max-width:760px){
-    .page{ flex-direction:column; align-items:center; padding-top:8px; gap:24px; }
-    .intro{ text-align:center; padding-top:6px; }
-    .sub{ margin-left:auto; margin-right:auto; }
-    .feature-list{ align-items:center; }
-    .feature-list li{ justify-content:center; }
+    .page{ flex-direction:column; align-items:stretch; padding-top:0; gap:0; }
   }
 
   .mascot{ font-size:52px; text-align:center; margin:6px 0 16px; }
@@ -185,7 +172,7 @@
   .log-item .lex{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
 
   .status-toast{ font-size:12px; color:var(--ink-soft); text-align:center; margin-top:10px; min-height:14px; }
-  footer{ margin-top:26px; font-size:11px; color:#6C9490; text-align:center; }
+  footer{ flex:0 0 auto; padding:6px 0 10px; font-size:11px; color:#6C9490; text-align:center; }
   .admin-link{ cursor:pointer; text-decoration:underline; margin-left:8px; color:#88B3AE; }
 
   .challenge-banner{ background:#fff; border:1.5px solid var(--yellow); border-radius:14px; padding:12px 14px; margin-top:12px; }
