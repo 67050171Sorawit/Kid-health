@@ -249,6 +249,7 @@
   <main class="page">
     <div class="card-wrap">
       <div class="screen" id="screen"></div>
+      <datalist id="foodSuggestions"></datalist>
     </div>
   </main>
 
@@ -428,12 +429,87 @@ function hasCheckedInToday(){
 // characters, and only use characters that plausibly appear in a menu
 // name (letters, digits, spaces, and light punctuation) — blocks things
 // like pure numbers, random symbols, or gibberish-only input.
+// A curated list of real dish/food names. Free-typed food text is only
+// accepted if it matches (or is built from) entries in this list — this
+// stops kids from typing made-up or nonsense "food" to get past the form.
+const knownFoodMenu = [
+  // ข้าว/จานหลัก
+  'ข้าวผัด','ข้าวผัดกุ้ง','ข้าวผัดปู','ข้าวผัดหมู','ข้าวผัดไก่','ข้าวผัดอเมริกัน','ข้าวผัดกะเพรา',
+  'ข้าวกะเพราหมู','ข้าวกะเพราไก่','ข้าวกะเพราหมูกรอบ','ข้าวกะเพราทะเล','ข้าวไข่เจียว','ข้าวไข่ดาว',
+  'ข้าวมันไก่','ข้าวมันไก่ทอด','ข้าวหมูแดง','ข้าวหมูกรอบ','ข้าวขาหมู','ข้าวคลุกกะปิ','ข้าวหน้าไก่',
+  'ข้าวหน้าเป็ด','ข้าวราดแกง','ข้าวผัดต้มยำ','ข้าวไข่เจียวหมูสับ','ข้าวต้ม','ข้าวต้มกุ้ง','ข้าวต้มปลา',
+  'ข้าวต้มหมู','โจ๊ก','โจ๊กหมู','โจ๊กไข่','ข้าวเหนียวหมูปิ้ง','ข้าวเหนียวมะม่วง','ข้าวเหนียวไก่ย่าง',
+  // กับข้าว/แกง
+  'ต้มยำกุ้ง','ต้มยำไก่','ต้มข่าไก่','แกงเขียวหวาน','แกงเขียวหวานไก่','แกงมัสมั่น','แกงกะหรี่',
+  'แกงส้ม','แกงจืด','แกงจืดเต้าหู้','แกงเผ็ด','แกงป่า','พะโล้','ไข่พะโล้','ผัดกะเพรา','ผัดกะเพราหมูสับ',
+  'ผัดพริกแกง','ผัดซีอิ๊ว','ผัดไทย','ผัดผักบุ้ง','ผัดคะน้า','ผัดผักรวม','ผัดผัก','ผัดวุ้นเส้น',
+  'ผัดเปรี้ยวหวาน','ผัดหมี่','ราดหน้า','ราดหน้าหมู','ราดหน้าทะเล','ผัดฉ่า','คั่วกลิ้ง',
+  // ทอด/ย่าง/นึ่ง
+  'ไก่ทอด','หมูทอด','ปลาทอด','กุ้งทอด','ปลาทอดน้ำปลา','ปลานึ่งมะนาว','ไก่ย่าง','หมูปิ้ง','หมูย่าง',
+  'ปลาเผา','หมูสะเต๊ะ','ไก่สะเต๊ะ','ทอดมันปลา','ทอดมันกุ้ง','เต้าหู้ทอด','ปอเปี๊ยะทอด','นักเก็ต',
+  'นักเก็ตไก่','ไส้กรอก','ไข่เจียว','ไข่ดาว','ไข่ต้ม','ไข่ตุ๋น','ไข่ลูกเขย',
+  // ก๋วยเตี๋ยว/เส้น
+  'ก๋วยเตี๋ยว','ก๋วยเตี๋ยวหมู','ก๋วยเตี๋ยวเรือ','ก๋วยเตี๋ยวต้มยำ','ก๋วยเตี๋ยวเป็ด','บะหมี่','บะหมี่หมูแดง',
+  'บะหมี่เกี๊ยว','เกี๊ยวซ่า','สุกี้','สุกี้แห้ง','สุกี้น้ำ','ชาบู','หมี่กรอบ',
+  // ยำ/ส้มตำ/สลัด
+  'ส้มตำ','ตำไทย','ตำปูปลาร้า','ลาบหมู','ลาบไก่','น้ำตกหมู','ยำวุ้นเส้น','ยำปลาทู','ยำถั่วพู',
+  'ยำมาม่า','สลัดผัก','สลัดผลไม้','สลัดไก่','น้ำพริกผักต้ม','น้ำพริกกะปิ','น้ำพริกอ่อง',
+  // นานาชาติ/ฟาสต์ฟู้ด
+  'พิซซ่า','สปาเก็ตตี้','สปาเก็ตตี้คาโบนาร่า','สเต็ก','สเต็กหมู','สเต็กไก่','แฮมเบอร์เกอร์','แซนวิช',
+  'แซนด์วิชแฮม','ฮอทดอก','ซูชิ','ข้าวปั้น','เกี๊ยวห่อ','มาม่า','มาม่าผัด','บะหมี่กึ่งสำเร็จรูป',
+  // ของว่าง/ขนม
+  'ขนมปัง','ขนมปังปิ้ง','ขนมครก','กล้วยทอด','ปาท่องโก๋','บัวลอย','ข้าวเหนียวมูน','วุ้น','ทับทิมกรอบ',
+  'เค้ก','คุกกี้','โดนัท','ไอศกรีม','พุดดิ้ง','เยลลี่','ลูกอม','ช็อกโกแลต',
+  // ผลไม้
+  'ผลไม้','ผลไม้รวม','กล้วย','ส้ม','แอปเปิ้ล','แตงโม','มะม่วง','สับปะรด','องุ่น','ฝรั่ง','มะละกอ',
+  'ลิ้นจี่','เงาะ','ลำไย','แก้วมังกร','สตรอว์เบอร์รี่','กีวี่',
+  // ผัก/ต้ม/นึ่ง
+  'ข้าวโพดต้ม','มันต้ม','เผือกต้ม','ฟักทองนึ่ง','ผักต้ม','ผักลวก',
+  // เครื่องดื่ม/นม
+  'นมจืด','นมกล่อง','นมสด','นมถั่วเหลือง','โยเกิร์ต','น้ำเปล่า','น้ำผลไม้','น้ำหวาน','น้ำอัดลม',
+  'นมเปรี้ยว','โอวัลติน','ไมโล',
+  // English equivalents (in case a dish is typed in English)
+  'fried rice','shrimp fried rice','crab fried rice','chicken fried rice','pad thai','pad see ew',
+  'green curry','red curry','massaman curry','tom yum','tom yum goong','tom kha gai','fried chicken',
+  'fried fish','fried pork','grilled chicken','grilled fish','grilled pork','omelette','fried egg',
+  'boiled egg','scrambled egg','noodle soup','fried noodle','dumplings','sukiyaki','shabu','papaya salad',
+  'som tam','larb','pizza','spaghetti','carbonara','steak','hamburger','burger','sandwich','hot dog',
+  'sushi','rice ball','nugget','chicken nugget','instant noodle','bread','toast','pancake','waffle',
+  'donut','cake','cookie','ice cream','pudding','jelly','candy','chocolate','french fries',
+  'fruit','banana','orange','apple','watermelon','mango','pineapple','grape','guava','papaya','strawberry',
+  'kiwi','corn','boiled corn','potato','pumpkin','vegetable soup','milk','soy milk','yogurt','water',
+  'juice','fruit juice','soft drink',
+];
+
+// Populate the <datalist> once so both food inputs (new check-in + edit
+// log) can offer autocomplete suggestions from knownFoodMenu.
+(function populateFoodSuggestions(){
+  const dl = document.getElementById('foodSuggestions');
+  if(!dl) return;
+  dl.innerHTML = knownFoodMenu.map(f=> `<option value="${escapeHtml(f)}">`).join('');
+})();
+
+function normalizeFoodStr(s){
+  return (s||'').toLowerCase().replace(/\s+/g,'').trim();
+}
+function isKnownFoodSegment(segment){
+  const norm = normalizeFoodStr(segment);
+  if(norm.length < 2) return false;
+  return knownFoodMenu.some(f=>{
+    const fn = normalizeFoodStr(f);
+    return norm===fn || norm.includes(fn) || fn.includes(norm);
+  });
+}
+// Accepts combos like "ข้าวผัด + ไข่ดาว" or "ข้าวผัด 2 จาน" — strips
+// quantity/measure words, splits on common separators, and requires every
+// remaining piece to match something in knownFoodMenu.
 function isValidFoodText(str){
-  const s = (str||'').trim();
-  if(s.length < 2) return false;
-  if(!/[a-zA-Zก-ฮ]/.test(s)) return false; // must contain at least one letter
-  if(!/^[a-zA-Zก-๙0-9\s\.\,\(\)\-\/]+$/.test(s)) return false; // allowed charset only
-  return true;
+  let s = (str||'').trim();
+  if(!s) return false;
+  s = s.replace(/\d+\s*(จาน|ชาม|ถ้วย|ชิ้น|ฟอง|แก้ว|ก้อน|ห่อ|ที่|คำ|ลูก|ผล|ไม้|ใบ|กล่อง|ขวด)/g, '');
+  const segments = s.split(/[\+,\/]|กับ|และ/).map(x=>x.trim()).filter(Boolean);
+  if(!segments.length) return false;
+  return segments.every(isKnownFoodSegment);
 }
 
 // ============ STATE ============
@@ -1091,7 +1167,7 @@ const builders = {
           <button class="yn-btn no ${m.eaten===false?'active':''}" data-meal-idx="${mi}" data-val="no">No</button>
         </div>
         ${m.eaten===true ? `
-          <input class="field editFoodInput" data-meal-idx="${mi}" placeholder="พิมพ์เมนูอาหาร..." value="${escapeHtml(m.food)}" style="margin-top:10px;"/>
+          <input class="field editFoodInput" data-meal-idx="${mi}" list="foodSuggestions" placeholder="พิมพ์เมนูอาหาร..." value="${escapeHtml(m.food)}" style="margin-top:10px;"/>
           <div class="food-tags" style="margin-top:8px;">
             ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-meal-idx="${mi}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
           </div>` : ''}
@@ -1147,7 +1223,7 @@ const builders = {
       <div class="title-row"><span class="icon">🍱</span><div class="h2">${mealNames[ctx.mealIndex]} กินอะไรไปบ้าง?</div></div>
       <div class="progress-track"><div class="progress-fill" style="width:${(ctx.mealIndex/totalSteps*100)}%"></div></div>
       <div class="progress-label">ขั้นตอนที่ ${ctx.mealIndex+1}/${totalSteps}</div>
-      <input class="field" id="foodInput" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${escapeHtml(m.food)}" />
+      <input class="field" id="foodInput" list="foodSuggestions" placeholder="พิมพ์เมนูอาหาร..." style="margin-top:10px;" value="${escapeHtml(m.food)}" />
       <div class="field-label">หรือแตะเลือกจากรายการ</div>
       <div class="food-tags">
         ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
@@ -1455,7 +1531,7 @@ function bindInteractions(s){
         return;
       }
       if(food && !isValidFoodText(food)){
-        document.getElementById('foodErr').textContent = 'กรุณาพิมพ์ชื่อเมนูอาหารให้ถูกต้องนะ (ตัวอักษรเท่านั้น ไม่ใช่ตัวเลขล้วนหรือสัญลักษณ์)';
+        document.getElementById('foodErr').textContent = 'ไม่พบเมนูนี้ในรายการที่รู้จักนะ ลองพิมพ์ชื่อเมนูให้ชัดเจน หรือเลือกจากที่แนะนำ (แตะแล้วจะมีตัวเลือกให้เลือก) หรือแตะแท็กด้านล่างแทนก็ได้';
         return;
       }
       ctx.meals[ctx.mealIndex].food = food;
@@ -1570,7 +1646,7 @@ function bindInteractions(s){
       }
       const invalidFood = d.meals.some(m=> m.eaten===true && m.food.trim() && !isValidFoodText(m.food));
       if(invalidFood){
-        document.getElementById('editErr').textContent = 'กรุณาพิมพ์ชื่อเมนูอาหารให้ถูกต้องนะ (ตัวอักษรเท่านั้น ไม่ใช่ตัวเลขล้วนหรือสัญลักษณ์)';
+        document.getElementById('editErr').textContent = 'ไม่พบเมนูนี้ในรายการที่รู้จักนะ ลองพิมพ์ชื่อเมนูให้ชัดเจน หรือเลือกจากที่แนะนำ (แตะแล้วจะมีตัวเลือกให้เลือก) หรือแตะแท็กด้านล่างแทนก็ได้';
         return;
       }
       if(editDurInp) d.exercise.duration = editDurInp.value.trim();
