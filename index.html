@@ -415,6 +415,26 @@ function getDisplayStreak(){
   if(data.streak.lastDate === today || data.streak.lastDate === yesterdayStr()) return data.streak.count || 0;
   return 0;
 }
+// A single global "last check-in date" (same field the streak uses) means
+// once ANY week's check-in is completed today, no more check-ins — of any
+// week — can happen until tomorrow. This is what enforces "one day at a
+// time, no skipping ahead to fill in future days."
+function hasCheckedInToday(){
+  return !!(data.streak && data.streak.lastDate === todayStr());
+}
+
+// Basic sanity check that free-typed text looks like a food/dish name:
+// must contain at least one Thai or English letter, be at least 2
+// characters, and only use characters that plausibly appear in a menu
+// name (letters, digits, spaces, and light punctuation) — blocks things
+// like pure numbers, random symbols, or gibberish-only input.
+function isValidFoodText(str){
+  const s = (str||'').trim();
+  if(s.length < 2) return false;
+  if(!/[a-zA-Zก-ฮ]/.test(s)) return false; // must contain at least one letter
+  if(!/^[a-zA-Zก-๙0-9\s\.\,\(\)\-\/]+$/.test(s)) return false; // allowed charset only
+  return true;
+}
 
 // ============ STATE ============
 // ---- Firebase setup ----
@@ -1013,6 +1033,7 @@ const builders = {
       return `<div class="day-cell ${done?'done':''} ${isToday?'today':''}">${done?'✓':dayNum}</div>`;
     }).join('');
     const finished = w.done>=7;
+    const checkedInToday = hasCheckedInToday();
 
     const logsHtml = w.logs && w.logs.length ? `
       <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา (แตะเพื่อแก้ไข)</div>
@@ -1054,7 +1075,9 @@ const builders = {
       <div style="margin-top:auto;"></div>
       ${finished
         ? `<button class="big-btn" id="backToWeeks2">กลับไปหน้าสัปดาห์</button>`
-        : `<button class="big-btn" id="toCheckin">เช็คอินวันนี้</button>`}
+        : (checkedInToday
+            ? `<div class="challenge-banner" style="text-align:center;"><div class="ctext">✅ วันนี้เช็คอินไปแล้ว มาต่ออีกทีพรุ่งนี้นะ</div></div>`
+            : `<button class="big-btn" id="toCheckin">เช็คอินวันนี้</button>`)}
     </div>`;
   },
 
@@ -1388,7 +1411,9 @@ function bindInteractions(s){
     if(finished){
       document.getElementById('backToWeeks2').addEventListener('click', ()=>{ screenState='weeks'; render(); });
     }else{
-      document.getElementById('toCheckin').addEventListener('click', ()=>{
+      const checkinBtn = document.getElementById('toCheckin');
+      if(checkinBtn) checkinBtn.addEventListener('click', ()=>{
+        if(hasCheckedInToday()){ screenState='weekDetail'; render(); return; } // shouldn't happen, but stay safe
         ctx.meals = freshMeals();
         ctx.mealIndex = 0;
         ctx.exercise = freshExercise();
@@ -1427,6 +1452,10 @@ function bindInteractions(s){
       const hasTags = ctx.meals[ctx.mealIndex].tags.length > 0;
       if(!food && !hasTags){
         document.getElementById('foodErr').textContent = 'พิมพ์เมนูอาหาร หรือแตะเลือกจากรายการก่อนนะ';
+        return;
+      }
+      if(food && !isValidFoodText(food)){
+        document.getElementById('foodErr').textContent = 'กรุณาพิมพ์ชื่อเมนูอาหารให้ถูกต้องนะ (ตัวอักษรเท่านั้น ไม่ใช่ตัวเลขล้วนหรือสัญลักษณ์)';
         return;
       }
       ctx.meals[ctx.mealIndex].food = food;
@@ -1539,6 +1568,11 @@ function bindInteractions(s){
         document.getElementById('editErr').textContent = 'กรุณาพิมพ์เมนูอาหาร หรือเลือกจากรายการให้ครบทุกมื้อที่ทานก่อนบันทึก';
         return;
       }
+      const invalidFood = d.meals.some(m=> m.eaten===true && m.food.trim() && !isValidFoodText(m.food));
+      if(invalidFood){
+        document.getElementById('editErr').textContent = 'กรุณาพิมพ์ชื่อเมนูอาหารให้ถูกต้องนะ (ตัวอักษรเท่านั้น ไม่ใช่ตัวเลขล้วนหรือสัญลักษณ์)';
+        return;
+      }
       if(editDurInp) d.exercise.duration = editDurInp.value.trim();
       const wk = data.weeks[ctx.editWeek];
       wk.logs[ctx.editLogIndex] = {
@@ -1647,6 +1681,12 @@ function advanceMeal(){
 }
 
 function finishDay(){
+  if(hasCheckedInToday()){
+    // Already checked in today (e.g. two tabs open) — don't double-count,
+    // just show the completion screen.
+    screenState='dayDone'; render();
+    return;
+  }
   const w = data.weeks[ctx.activeWeek];
   if(w.done<7){
     w.done++;
