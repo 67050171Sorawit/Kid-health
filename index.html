@@ -208,6 +208,34 @@
   .auth-tab{ flex:1; text-align:center; padding:9px 0; border-radius:10px; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; border:1.5px solid var(--line); background:#fff; }
   .auth-tab.active{ border-color:var(--coral); background:#FFF1EC; color:var(--coral); }
   .user-chip{ font-size:11px; color:var(--ink-soft); text-align:center; margin-bottom:6px; }
+
+  .confetti-piece{
+    position:fixed; top:-24px; width:8px; height:14px; opacity:.95; z-index:9999;
+    pointer-events:none; border-radius:2px;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall{
+    to{ transform: translateY(112vh) rotate(560deg); opacity:0; }
+  }
+
+  .bounce-text span{ display:inline-block; animation: bounce-letter .7s ease-in-out infinite; }
+  @keyframes bounce-letter{
+    0%,100%{ transform: translateY(0); }
+    50%{ transform: translateY(-8px); }
+  }
+
+  .mascot-row{ display:flex; align-items:flex-end; gap:8px; margin:10px 0; }
+  .mascot-row .m-emoji{ font-size:32px; line-height:1; flex-shrink:0; }
+  .mascot-row .m-bubble{
+    background:#fff; border:1.5px solid var(--line); border-radius:14px 14px 14px 4px;
+    padding:9px 12px; font-size:12px; color:var(--ink); line-height:1.5; max-width:250px;
+  }
+
+  .streak-chip{
+    display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700;
+    color:#B5490A; background:#FFEEDD; border:1.5px solid #FFD1A8; border-radius:999px;
+    padding:4px 11px; font-family:'Baloo 2';
+  }
 </style>
 </head>
 <body>
@@ -289,6 +317,105 @@ function idealWeightRange(heightCm){
   return { min: (18.5*h*h).toFixed(1), max: (24.9*h*h).toFixed(1) };
 }
 
+// ============ FUN STUFF: confetti, bounce text, mascot, streaks ============
+function burstConfetti(count){
+  count = count || 40;
+  const colors = ['#FF6B4A','#4ECDC4','#FFC857','#FF9142','#3FA34D'];
+  for(let i=0;i<count;i++){
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = (Math.random()*100) + 'vw';
+    el.style.background = colors[Math.floor(Math.random()*colors.length)];
+    el.style.animationDuration = (2 + Math.random()*1.4) + 's';
+    el.style.animationDelay = (Math.random()*0.3) + 's';
+    document.body.appendChild(el);
+    setTimeout(()=> el.remove(), 4200);
+  }
+}
+
+// Wraps each character in its own <span> with a staggered animation-delay
+// so the whole string appears to bounce like a wave.
+function bounceText(str){
+  return `<span class="bounce-text">${[...str].map((ch,i)=>
+    `<span style="animation-delay:${(i*0.05).toFixed(2)}s">${ch===' '?'&nbsp;':escapeHtml(ch)}</span>`
+  ).join('')}</span>`;
+}
+
+const mascotMessages = {
+  welcome: [
+    'สวัสดี! วันนี้พร้อมลุยกันหรือยัง 💪',
+    'ดีใจที่หนูกลับมานะ ไปทำภารกิจกันเลย 🌟',
+    'หนูเก่งที่สุดในวันนี้แน่นอน 😄',
+  ],
+  dayDone: [
+    'เก่งมากกก! วันนี้ทำสำเร็จแล้ว 🎉',
+    'สุดยอดไปเลย หนูทำได้ดีมาก ✨',
+    'ภูมิใจในตัวหนูมากเลยนะ 💚',
+  ],
+  streak3: [
+    'ต่อเนื่อง 3 วันแล้ว! หนูเจ๋งมาก 🔥',
+    'ทำได้ต่อเนื่องขนาดนี้ สุดยอดไปเลย!',
+  ],
+  streak7: [
+    '7 วันติดต่อกัน! หนูคือนักสู้สุขภาพตัวจริง 🏆',
+    'ไฟลุกเลย! ต่อเนื่อง 7 วันแล้วนะเนี่ย 🔥🔥',
+  ],
+  bmiNormal: [
+    'เยี่ยมไปเลย! ดูแลตัวเองต่อแบบนี้นะ 🌈',
+    'สุขภาพดีขนาดนี้ เก่งมากจริง ๆ 💚',
+  ],
+  bmiCare: [
+    'ไม่เป็นไรนะ ค่อย ๆ ดูแลตัวเองไปด้วยกัน หนูทำได้แน่นอน 💚',
+    'เดี๋ยวเราช่วยกันดูแลสุขภาพให้ดีขึ้นนะ สู้ ๆ 💪',
+  ],
+  quizPerfect: [
+    'เก่งสุด ๆ ตอบถูกหมดเลย! 🌟',
+    'ว้าว! รู้เรื่องอาหารดีมากจริง ๆ 🥳',
+  ],
+  quizOk: [
+    'ไม่เป็นไรนะ ลองใหม่ได้เรื่อย ๆ หนูเก่งอยู่แล้ว 😊',
+    'เกือบแล้ว! คราวหน้าต้องได้เต็มแน่นอน 💪',
+  ],
+};
+function pickMascotMsg(key){
+  const arr = mascotMessages[key] || ['สู้ ๆ นะ! 💪'];
+  return arr[Math.floor(Math.random()*arr.length)];
+}
+function mascotBubble(key, emoji){
+  emoji = emoji || '🧑‍🦱';
+  const msg = pickMascotMsg(key);
+  return `<div class="mascot-row"><div class="m-emoji">${emoji}</div><div class="m-bubble">${escapeHtml(msg)}</div></div>`;
+}
+
+// ---- Streak (consecutive check-in days), Duolingo-style ----
+function yesterdayStr(){
+  const d = new Date();
+  d.setDate(d.getDate()-1);
+  return d.toISOString().slice(0,10);
+}
+function updateStreak(){
+  if(!data.streak) data.streak = { count:0, lastDate:null };
+  const today = todayStr();
+  if(data.streak.lastDate === today){
+    // already checked in today, no change
+  }else if(data.streak.lastDate === yesterdayStr()){
+    data.streak.count = (data.streak.count||0) + 1;
+    data.streak.lastDate = today;
+  }else{
+    data.streak.count = 1;
+    data.streak.lastDate = today;
+  }
+}
+// Streak only "counts" for display if the last check-in was today or
+// yesterday — otherwise it's effectively broken even if we haven't
+// overwritten the stored count yet (that only happens on the next check-in).
+function getDisplayStreak(){
+  if(!data.streak || !data.streak.lastDate) return 0;
+  const today = todayStr();
+  if(data.streak.lastDate === today || data.streak.lastDate === yesterdayStr()) return data.streak.count || 0;
+  return 0;
+}
+
 // ============ STATE ============
 // ---- Firebase setup ----
 // 1) Create a free project at https://console.firebase.google.com
@@ -341,6 +468,7 @@ const defaultState = {
   playerId: null,
   dailyChallenge: null, // { date:'YYYY-MM-DD', text:'...' }
   dailyFood: null, // { date:'YYYY-MM-DD', text:'...' }
+  streak: { count:0, lastDate:null },
 };
 let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
@@ -417,6 +545,7 @@ async function loadUserData(){
   }
   if(!data.playerId) data.playerId = currentUid;
   if(data.dailyFood === undefined) data.dailyFood = null;
+  if(!data.streak) data.streak = { count:0, lastDate:null };
 }
 
 async function saveData(){
@@ -782,6 +911,7 @@ const builders = {
         <div style="font-size:11px; color:${info.textColor}; opacity:.85; margin-top:2px;">เกณฑ์ BMI: ${info.range}</div>
       </div>
       <div style="font-size:12.5px; color:var(--ink-soft); text-align:center; line-height:1.7; margin-top:14px;">${info.advice}</div>
+      ${mascotBubble(info.key==='normal' ? 'bmiNormal' : 'bmiCare')}
       ${idealHtml}
       <div class="field-label" style="margin-top:16px; align-self:flex-start;">เทียบกับเกณฑ์ทั้งหมด</div>
       <div style="width:100%; display:flex; flex-direction:column; gap:2px;">${swatchesHtml}</div>
@@ -831,6 +961,7 @@ const builders = {
       <div style="font-size:13px; color:var(--ink-soft); text-align:center; line-height:1.7; margin-bottom:10px;">
         ${data.quiz.score===total ? 'เก่งมาก! รู้เรื่องอาหารดีเลย 🎉' : 'ไม่เป็นไร ค่อย ๆ เรียนรู้ไปพร้อมกันนะ 💪'}
       </div>
+      ${mascotBubble(data.quiz.score===total ? 'quizPerfect' : 'quizOk')}
       <div style="width:100%;">${reviewHtml}</div>
       <button class="big-btn" id="toWeeksFirst" style="margin-top:16px;">เริ่มโปรแกรม 4 สัปดาห์</button>
     </div>`;
@@ -854,12 +985,16 @@ const builders = {
     const foodHtml = hasFoodToday
       ? `<div class="challenge-banner food"><div class="clabel">เมนูอาหารแนะนำวันนี้</div><div class="ctext">🍽️ ${escapeHtml(data.dailyFood.text)}</div></div>`
       : `<button class="ghost-btn" id="toFoodWheel" style="margin-top:8px;">🍽️ หมุนสุ่มเมนูอาหารวันนี้</button>`;
+    const streak = getDisplayStreak();
+    const streakHtml = streak>0 ? `<span class="streak-chip">🔥 ${streak} วันติดต่อกัน</span>` : '';
     return `
     <div class="topbar"><span class="screen-tag">โปรแกรม</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📅</span><div class="h2">สวัสดี ${escapeHtml(data.profile.name) || 'เพื่อนนักสู้'}</div></div>
       <div style="font-size:12px; color:var(--ink-soft);">โปรแกรมสุขภาพ 4 สัปดาห์ของหนู</div>
       <div class="user-chip">เข้าสู่ระบบเป็น ${escapeHtml(currentUsername || '')}</div>
+      ${streakHtml ? `<div style="text-align:center; margin-top:4px;">${streakHtml}</div>` : ''}
+      ${mascotBubble('welcome')}
       ${challengeHtml}
       ${foodHtml}
       <div class="week-list">${items}</div>
@@ -1025,16 +1160,22 @@ const builders = {
       <button class="big-btn" id="exerciseNext" ${ctx.exercise.done===null?'disabled':''}>เสร็จสิ้น</button>
     </div>`,
 
-  dayDone: () => `
+  dayDone: () => {
+    const streak = getDisplayStreak();
+    const mascotKey = streak>=7 ? 'streak7' : (streak>=3 ? 'streak3' : 'dayDone');
+    return `
     <div class="screen-content" style="align-items:center;">
       <div class="done-hero">
         <div class="em">🎉</div>
-        <div class="h2">เก่งมาก! เช็คอินสำเร็จ</div>
+        <div class="h2">${bounceText('เก่งมาก! เช็คอินสำเร็จ')}</div>
         <div style="font-size:12.5px; color:var(--ink-soft); margin-top:6px;">วันนี้ทำสำเร็จแล้ว เจอกันพรุ่งนี้นะ</div>
+        ${streak>1 ? `<div style="margin-top:10px;"><span class="streak-chip">🔥 ต่อเนื่อง ${streak} วัน</span></div>` : ''}
+        ${mascotBubble(mascotKey)}
       </div>
       <button class="big-btn" id="toRewardWheel">🎁 หมุนวงล้อรับของรางวัล</button>
       <button class="ghost-btn" id="backToWeekDetail2">กลับไปหน้า Week ${ctx.activeWeek+1}</button>
-    </div>`,
+    </div>`;
+  },
 
   wheel: () => {
     const w = ctx.wheel;
@@ -1207,6 +1348,7 @@ function bindInteractions(s){
       data.quiz.score = score;
       data.quiz.submitted = true;
       screenState='quizResult'; render();
+      if(score===quizQuestions.length) burstConfetti(30);
     });
   }
 
@@ -1470,6 +1612,7 @@ function spinWheel(){
     ctx.wheel.rotation = finalRotation;
     ctx.wheel.spun = true;
     render();
+    burstConfetti(24);
   }, 3300);
 }
 
@@ -1513,9 +1656,11 @@ function finishDay(){
       exercise: { done: ctx.exercise.done, type: ctx.exercise.type, duration: ctx.exercise.duration }
     });
   }
+  updateStreak();
   saveData();
   screenState='dayDone';
   render();
+  burstConfetti();
 }
 
 document.getElementById('adminEntry').addEventListener('click', ()=>{
