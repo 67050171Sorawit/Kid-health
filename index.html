@@ -246,6 +246,49 @@ function freshExercise(){
   return { done:null, type:'', duration:'' };
 }
 
+// ============ BMI ============
+function calcBMI(weightKg, heightCm){
+  const h = parseFloat(heightCm) / 100;
+  const w = parseFloat(weightKg);
+  if(!h || h<=0 || !w || w<=0) return null;
+  return w / (h*h);
+}
+
+// Category cutoffs & styling as specified:
+//   สีเขียวอ่อน  น้อยกว่าเกณฑ์   < 18.5
+//   สีขาว        ปกติ            18.5 - 24.9
+//   สีเขียวเข้ม  มากกว่าเกณฑ์    25 - 29.9
+//   สีเหลือง     อ้วนระดับ 1     30 - 34.9
+//   สีส้ม        อ้วนระดับ 2     >= 35
+const bmiCategories = [
+  { key:'under',  label:'น้อยกว่าเกณฑ์', range:'น้อยกว่า 18.5', color:'#BFEAC5', textColor:'#1B5E20',
+    advice:'หนูมีน้ำหนักน้อยกว่าเกณฑ์นะ ลองทานอาหารให้ครบ 5 หมู่ เน้นข้าว เนื้อสัตว์ ไข่ นม และผลไม้ให้เพียงพอ พร้อมพักผ่อนให้เต็มที่ ถ้าไม่แน่ใจลองปรึกษาคุณหมอหรือผู้ปกครองเพิ่มเติมได้นะ' },
+  { key:'normal', label:'ปกติ', range:'18.5 - 24.9', color:'#FFFFFF', textColor:'#14302F',
+    advice:'เยี่ยมมาก! น้ำหนักและส่วนสูงของหนูอยู่ในเกณฑ์ปกติ รักษาสุขภาพแบบนี้ต่อไปนะ ทานอาหารมีประโยชน์และออกกำลังกายสม่ำเสมอ' },
+  { key:'over',   label:'มากกว่าเกณฑ์', range:'25 - 29.9', color:'#3FA34D', textColor:'#FFFFFF',
+    advice:'น้ำหนักของหนูมากกว่าเกณฑ์เล็กน้อยนะ ลองเพิ่มการออกกำลังกาย ลดของหวานและของทอด แล้วสุขภาพจะดีขึ้นได้' },
+  { key:'obese1', label:'อ้วนระดับ 1', range:'30 - 34.9', color:'#FFC857', textColor:'#5C3D00',
+    advice:'น้ำหนักของหนูอยู่ในระดับที่ควรดูแลเป็นพิเศษนะ ลองทานผักผลไม้ให้มากขึ้น ลดน้ำหวานและของทอด ออกกำลังกายสม่ำเสมอ และปรึกษาคุณหมอหรือผู้ปกครองเพื่อดูแลสุขภาพเพิ่มเติมได้นะ' },
+  { key:'obese2', label:'อ้วนระดับ 2', range:'35 ขึ้นไป', color:'#FF9142', textColor:'#5C2600',
+    advice:'น้ำหนักของหนูอยู่ในระดับที่ควรดูแลอย่างใกล้ชิดนะ แนะนำให้ปรึกษาคุณหมอหรือผู้ปกครองเพื่อช่วยกันวางแผนดูแลสุขภาพให้เหมาะสมนะ' },
+];
+
+function getBmiInfo(bmi){
+  if(bmi==null) return null;
+  if(bmi < 18.5) return bmiCategories[0];
+  if(bmi < 25)   return bmiCategories[1];
+  if(bmi < 30)   return bmiCategories[2];
+  if(bmi < 35)   return bmiCategories[3];
+  return bmiCategories[4];
+}
+
+// Weight range (kg) that would put this height in the "ปกติ" (normal) band
+function idealWeightRange(heightCm){
+  const h = parseFloat(heightCm) / 100;
+  if(!h || h<=0) return null;
+  return { min: (18.5*h*h).toFixed(1), max: (24.9*h*h).toFixed(1) };
+}
+
 // ============ STATE ============
 // ---- Firebase setup ----
 // 1) Create a free project at https://console.firebase.google.com
@@ -291,7 +334,7 @@ const GOOGLE_SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby_cnT
 const GOOGLE_SHEETS_VIEW_URL = 'https://docs.google.com/spreadsheets/d/1KVricI0FjeKnxRFZALhOBx6swgkhX0GKWRiAMKu0Dok/edit?usp=sharing';   // e.g. 'https://docs.google.com/spreadsheets/d/XXXXX/edit'
 
 const defaultState = {
-  profile: { lang:'th', name:'', weight:'', height:'' },
+  profile: { lang:'th', name:'', weight:'', height:'', bmi:null },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
   weeks: [ { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] } ],
   onboarded: false,
@@ -696,6 +739,7 @@ const builders = {
     <div class="topbar"><span class="screen-tag">3 · นน./สส.</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📏</span><div class="h2">น้ำหนัก / ส่วนสูง</div></div>
+      <div style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">กรอกให้ครบ แล้วเราจะคำนวณค่า BMI ให้หนูดูด้วยนะ</div>
       <div class="row2" style="margin-top:14px;">
         <div>
           <div class="field-label">น้ำหนัก (กก.)</div>
@@ -710,6 +754,41 @@ const builders = {
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="toQuiz">OK</button>
     </div>`,
+
+  bmiResult: () => {
+    const bmi = data.profile.bmi;
+    const info = getBmiInfo(bmi);
+    const ideal = idealWeightRange(data.profile.height);
+    if(!info) return `<div class="screen-content"><div class="h2">ไม่พบข้อมูล</div></div>`;
+    const needsBorder = info.key==='normal'; // white chip needs a visible border
+    const swatchesHtml = bmiCategories.map(c=>{
+      const isCurrent = c.key===info.key;
+      return `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; ${isCurrent ? 'background:#F0EAD9;' : ''}">
+        <div style="width:16px; height:16px; border-radius:5px; background:${c.color}; ${c.key==='normal'?'border:1.5px solid var(--line);':''} flex-shrink:0;"></div>
+        <div style="font-size:11px; color:var(--ink-soft); flex:1;">${c.label} (${c.range})</div>
+        ${isCurrent ? '<span style="font-size:13px;">👈 หนูอยู่ตรงนี้</span>' : ''}
+      </div>`;
+    }).join('');
+    const idealHtml = (ideal && info.key!=='normal')
+      ? `<div style="font-size:12px; color:var(--ink-soft); margin-top:10px; text-align:center;">สำหรับส่วนสูงของหนู น้ำหนักที่อยู่ในเกณฑ์ปกติคือประมาณ <b>${ideal.min} - ${ideal.max} กก.</b></div>`
+      : '';
+    return `
+    <div class="screen-content" style="align-items:center;">
+      <div class="topbar" style="position:static; margin-bottom:6px;"><span class="screen-tag">ผล BMI</span></div>
+      <div class="title-row"><span class="icon">⚖️</span><div class="h2">ค่า BMI ของหนู</div></div>
+      <div style="width:100%; background:${info.color}; ${needsBorder?'border:2px solid var(--line);':''} border-radius:16px; padding:18px; text-align:center; margin-top:10px;">
+        <div style="font-family:'Baloo 2'; font-weight:800; font-size:38px; color:${info.textColor};">${bmi.toFixed(1)}</div>
+        <div style="font-family:'Baloo 2'; font-weight:700; font-size:15px; color:${info.textColor}; margin-top:2px;">${info.label}</div>
+        <div style="font-size:11px; color:${info.textColor}; opacity:.85; margin-top:2px;">เกณฑ์ BMI: ${info.range}</div>
+      </div>
+      <div style="font-size:12.5px; color:var(--ink-soft); text-align:center; line-height:1.7; margin-top:14px;">${info.advice}</div>
+      ${idealHtml}
+      <div class="field-label" style="margin-top:16px; align-self:flex-start;">เทียบกับเกณฑ์ทั้งหมด</div>
+      <div style="width:100%; display:flex; flex-direction:column; gap:2px;">${swatchesHtml}</div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toQuizFromBmi" style="margin-top:16px;">ไปทำแบบทดสอบความรู้ต่อ</button>
+    </div>`;
+  },
 
   quiz: () => `
     <div class="topbar"><span class="screen-tag">4 · ความรู้</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
@@ -1101,6 +1180,13 @@ function bindInteractions(s){
         return;
       }
       data.profile.weight = wv; data.profile.height = hv;
+      data.profile.bmi = calcBMI(wv, hv);
+      screenState='bmiResult'; render();
+    });
+  }
+
+  if(s==='bmiResult'){
+    document.getElementById('toQuizFromBmi').addEventListener('click', ()=>{
       screenState='quiz'; render();
     });
   }
