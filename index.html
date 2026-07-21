@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>แอปติดตามสุขภาพเด็ก</title>
+<title>แอปติดตามสุขภาพ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
-    --bg-deep:#0F3D3E; --bg-deep-2:#0B2D2E;
+    --bg-deep:#000000; --bg-deep-2:#000000;
     --cream:#FFF8ED; --coral:#FF6B4A; --mint:#4ECDC4; --yellow:#FFC857;
     --ink:#14302F; --ink-soft:#4C6664; --line:#E7DFCC; --red:#E8563E;
   }
@@ -241,7 +241,7 @@
 <body>
   <header class="site-header">
     <div class="brand">
-      <span class="logo">🧑‍🦱</span>
+      <span class="logo">👩‍⚕️</span>
       <div class="name">Kid Health Journey<small>โปรแกรมสุขภาพ 4 สัปดาห์</small></div>
     </div>
   </header>
@@ -383,7 +383,7 @@ function pickMascotMsg(key){
   return arr[Math.floor(Math.random()*arr.length)];
 }
 function mascotBubble(key, emoji){
-  emoji = emoji || '🧑‍🦱';
+  emoji = emoji || '👩‍⚕️';
   const msg = pickMascotMsg(key);
   return `<div class="mascot-row"><div class="m-emoji">${emoji}</div><div class="m-bubble">${escapeHtml(msg)}</div></div>`;
 }
