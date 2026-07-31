@@ -1060,14 +1060,16 @@ const builders = {
         ${label}
       </div>`;
     }).join('');
+    const bmiGroup = getBmiWheelGroup();
     const hasChallengeToday = data.dailyChallenge && data.dailyChallenge.date === todayStr();
-    const challengeHtml = hasChallengeToday
-      ? `<div class="challenge-banner"><div class="clabel">ภารกิจออกกำลังกายวันนี้</div><div class="ctext">🎯 ${escapeHtml(data.dailyChallenge.text)}</div></div>`
-      : `<button class="ghost-btn" id="toChallengeWheel" style="margin-top:12px;">🎯 หมุนสุ่มภารกิจออกกำลังกายวันนี้</button>`;
+    const challengeHtml = !bmiGroup ? '' : (hasChallengeToday
+      ? `<div class="challenge-banner"><div class="clabel">ภารกิจออกกำลังกายวันนี้</div><div class="ctext">🎯 ${escapeHtml(data.dailyChallenge.text)}</div>${data.dailyChallenge.detail || data.dailyChallenge.benefit ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:4px;">${escapeHtml(data.dailyChallenge.detail||'')}${data.dailyChallenge.detail && data.dailyChallenge.benefit ? ' · ' : ''}${data.dailyChallenge.benefit ? 'ประโยชน์: '+escapeHtml(data.dailyChallenge.benefit) : ''}</div>` : ''}</div>`
+      : `<button class="ghost-btn" id="toChallengeWheel" style="margin-top:12px;">🎯 หมุนสุ่มภารกิจออกกำลังกายวันนี้</button>`);
     const hasFoodToday = data.dailyFood && data.dailyFood.date === todayStr();
-    const foodHtml = hasFoodToday
-      ? `<div class="challenge-banner food"><div class="clabel">เมนูอาหารแนะนำวันนี้</div><div class="ctext">🍽️ ${escapeHtml(data.dailyFood.text)}</div></div>`
-      : `<button class="ghost-btn" id="toFoodWheel" style="margin-top:8px;">🍽️ หมุนสุ่มเมนูอาหารวันนี้</button>`;
+    const foodHtml = !bmiGroup ? '' : (hasFoodToday
+      ? `<div class="challenge-banner food"><div class="clabel">เมนูอาหารแนะนำวันนี้</div><div class="ctext">🍽️ ${escapeHtml(data.dailyFood.text)}</div>${data.dailyFood.detail || data.dailyFood.benefit ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:4px;">${escapeHtml(data.dailyFood.detail||'')}${data.dailyFood.detail && data.dailyFood.benefit ? ' · ' : ''}${data.dailyFood.benefit ? 'ประโยชน์: '+escapeHtml(data.dailyFood.benefit) : ''}</div>` : ''}</div>`
+      : `<button class="ghost-btn" id="toFoodWheel" style="margin-top:8px;">🍽️ หมุนสุ่มเมนูอาหารวันนี้</button>`);
+    const bmiNoteHtml = bmiGroup ? '' : `<div style="font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:8px;">วงล้อภารกิจ/เมนูอาหารจะปลดล็อกสำหรับกลุ่ม BMI น้ำหนักเกินขึ้นไปนะ</div>`;
     const streak = getDisplayStreak();
     const streakHtml = streak>0 ? `<span class="streak-chip">🔥 ${streak} วันติดต่อกัน</span>` : '';
     return `
@@ -1080,6 +1082,7 @@ const builders = {
       ${mascotBubble('welcome')}
       ${challengeHtml}
       ${foodHtml}
+      ${bmiNoteHtml}
       <div class="week-list">${items}</div>
       <div style="margin-top:auto;"></div>
       <button class="ghost-btn" id="resetBtn">รีเซ็ตข้อมูลทั้งหมด</button>
@@ -1278,7 +1281,11 @@ const builders = {
     const title = isReward ? 'หมุนวงล้อรับของรางวัล' : (isFood ? 'หมุนวงล้อเมนูอาหารวันนี้' : 'หมุนวงล้อภารกิจออกกำลังกายวันนี้');
     const icon = isReward ? '🎁' : (isFood ? '🍽️' : '🎯');
     const showBack = !isReward && !w.spun;
-    const resultLabel = (w.resultIndex!=null) ? segs[w.resultIndex].label : '';
+    const resultItem = (w.resultIndex!=null) ? segs[w.resultIndex] : null;
+    const resultLabel = resultItem ? resultItem.label : '';
+    const resultSubHtml = resultItem && (resultItem.detail || resultItem.benefit)
+      ? `<div style="font-size:12px; color:var(--ink-soft); text-align:center; margin-top:4px;">${resultItem.detail ? escapeHtml(resultItem.detail) : ''}${resultItem.detail && resultItem.benefit ? ' · ' : ''}${resultItem.benefit ? 'ประโยชน์: '+escapeHtml(resultItem.benefit) : ''}</div>`
+      : '';
     const doneLabel = isReward ? 'กลับไปหน้า Week' : (isFood ? 'รับเมนูนี้' : 'เริ่มภารกิจนี้');
     return `
     <div class="topbar"><span class="screen-tag">${isReward?'รางวัล':(isFood?'เมนูวันนี้':'ภารกิจวันนี้')}</span>${showBack ? '<span class="back-link" id="wheelBack">‹ ย้อนกลับ</span>' : ''}</div>
@@ -1294,6 +1301,7 @@ const builders = {
       ${w.resultIndex==null
         ? `<button class="big-btn" id="spinBtn" style="margin-top:20px;" ${w.spinning?'disabled':''}>${w.spinning?'กำลังหมุน...':'หมุนเลย!'}</button>`
         : `<div class="wheel-result">🎉 ได้รับ: ${escapeHtml(resultLabel)}</div>
+           ${resultSubHtml}
            <button class="big-btn" id="wheelDoneBtn" style="margin-top:14px;">${doneLabel}</button>`}
     </div>`;
   },
@@ -1672,9 +1680,79 @@ function openEditLog(weekIndex, logIndex){
   render();
 }
 
+// ============ BMI-BASED WHEEL DATA (food menu + exercise plan) ============
+// Only the two "needs attention" BMI bands get a challenge/food wheel:
+//   obese1 (อ้วนระดับ 1 / น้ำหนักเกิน, BMI 30-34.9) -> yellow wheel
+//   obese2 (อ้วนระดับ 2 / อ้วน, BMI 35+)             -> orange wheel
+// Each wheel is a single color (matching the child's BMI band) with two
+// alternating shades so the pie slices stay visible.
+const bmiWheelData = {
+  obese1: {
+    shades: ['#FFC857', '#FFD883'],
+    food: [
+      { label:'🍚 ข้าวกล้อง+อกไก่ย่าง', detail:'ลดอาหารทอด', benefit:'โปรตีนสูง' },
+      { label:'🍲 แกงส้มผักรวม+ปลา', detail:'ปลา', benefit:'วิตามินสูง' },
+      { label:'🥦 ผักสด+ไข่ต้ม', detail:'น้ำตาล/ไขมันต่ำ', benefit:'ใยอาหารสูง' },
+      { label:'🍜 ต้มจับฉ่าย', detail:'ผักหลายชนิด', benefit:'ช่วยอิ่มนาน' },
+      { label:'🐟 ข้าว+ปลานึ่ง', detail:'ผักลวก', benefit:'โอเมก้า 3' },
+      { label:'🍎 แอปเปิ้ล+นมจืด', detail:'ของว่าง', benefit:'ลดการกินขนม' },
+    ],
+    exercise: [
+      { label:'🚶 เดินเร็ว', detail:'45 นาที · 5 วัน/สัปดาห์', benefit:'เผาผลาญพลังงาน' },
+      { label:'🏃 เหยาะ', detail:'30 นาที · 4 วัน/สัปดาห์', benefit:'ลดไขมัน' },
+      { label:'💃 เต้นแอโรบิก', detail:'40 นาที · 4 วัน/สัปดาห์', benefit:'เพิ่มสมรรถภาพหัวใจ' },
+      { label:'🏃‍♂️ วิ่งส่งของ', detail:'20 นาที · 2 วัน/สัปดาห์', benefit:'ฝึกความเร็ว/ทำงานเป็นทีม' },
+      { label:'🎯 ตี่จับ', detail:'20 นาที · 2 วัน/สัปดาห์', benefit:'เพิ่มการเคลื่อนไหวร่างกาย' },
+      { label:'🐴 ขี่ม้าส่งเมือง', detail:'20 นาที · 2 วัน/สัปดาห์', benefit:'ฝึกการเคลื่อนไหว/ความสามัคคี' },
+    ],
+  },
+  obese2: {
+    shades: ['#FF9142', '#FFAA66'],
+    food: [
+      { label:'🐟 ข้าวกล้อง+ปลานึ่ง', detail:'ผักลวก', benefit:'โปรตีนสูง' },
+      { label:'🍲 ต้มจืดเต้าหู้', detail:'หมูไม่ติดมัน', benefit:'อาหารอ่อน ย่อยง่าย' },
+      { label:'🍗 อกไก่อบ', detail:'ผักสด', benefit:'ไขมันต่ำ' },
+      { label:'🥗 ยำทูน่า', detail:'ไม่ใส่มายองเนส', benefit:'มีโอเมก้า 3' },
+      { label:'🍈 ผลไม้หวานน้อย', detail:'ฝรั่ง/ชมพู่', benefit:'ใยอาหารสูง' },
+      { label:'🥛 นมจืดไขมันต่ำ', detail:'1 กล่อง', benefit:'มีแคลเซียมสูง' },
+    ],
+    exercise: [
+      { label:'🚶 เดินเร็ว', detail:'50 นาที · 5-6 วัน/สัปดาห์', benefit:'ลดน้ำหนักอย่างปลอดภัย' },
+      { label:'💃 เต้นแอโรบิก', detail:'45 นาที · 4 วัน/สัปดาห์', benefit:'เผาผลาญไขมัน' },
+      { label:'🚴 ปั่นจักรยาน', detail:'30 นาที · 3 วัน/สัปดาห์', benefit:'ลดแรงกระแทกข้อ' },
+      { label:'🐍 งูกินหาง', detail:'20 นาที · 2 วัน/สัปดาห์', benefit:'เคลื่อนไหวทั้งตัว' },
+      { label:'🧣 หมอนซ่อนผ้า', detail:'20 นาที · 2 วัน/สัปดาห์', benefit:'เพิ่มการเคลื่อนไหวร่างกาย' },
+      { label:'🌾 รีรีข้าวสาร', detail:'20 นาที · 2 วัน/สัปดาห์', benefit:'สนุก ลดพฤติกรรมเนือยนิ่ง' },
+    ],
+  },
+};
+
+// Returns 'obese1' | 'obese2' | null depending on the child's current BMI.
+function getBmiWheelGroup(){
+  const info = getBmiInfo(data.profile.bmi);
+  if(!info) return null;
+  if(info.key==='obese1' || info.key==='obese2') return info.key;
+  return null;
+}
+
 // ============ WHEEL LOGIC ============
 function openWheel(mode){
-  const segments = mode==='reward' ? wheelRewardSegments : (mode==='food' ? wheelFoodSegments : wheelChallengeSegments);
+  if(mode==='reward'){
+    ctx.wheel = { mode, segments: wheelRewardSegments, spinning:false, resultIndex:null, rotation:0, spun:false };
+    screenState = 'wheel';
+    render();
+    return;
+  }
+  const group = getBmiWheelGroup();
+  if(!group) return; // challenge/food wheels only apply to obese1/obese2 BMI groups
+  const groupData = bmiWheelData[group];
+  const items = mode==='food' ? groupData.food : groupData.exercise;
+  const segments = items.map((it,i)=> ({
+    label: it.label,
+    detail: it.detail,
+    benefit: it.benefit,
+    color: groupData.shades[i % groupData.shades.length],
+  }));
   ctx.wheel = { mode, segments, spinning:false, resultIndex:null, rotation:0, spun:false };
   screenState = 'wheel';
   render();
@@ -1716,18 +1794,18 @@ function spinWheel(){
 function onWheelDone(){
   const w = ctx.wheel;
   if(!w || w.resultIndex==null) return;
-  const label = w.segments[w.resultIndex].label;
+  const item = w.segments[w.resultIndex];
   if(w.mode==='reward'){
     const wk = data.weeks[ctx.activeWeek];
-    if(wk.logs.length){ wk.logs[wk.logs.length-1].reward = label; }
+    if(wk.logs.length){ wk.logs[wk.logs.length-1].reward = item.label; }
     saveData();
     screenState = 'weekDetail';
   }else if(w.mode==='food'){
-    data.dailyFood = { date: todayStr(), text: label };
+    data.dailyFood = { date: todayStr(), text: item.label, detail: item.detail, benefit: item.benefit };
     saveData();
     screenState = 'weeks';
   }else{
-    data.dailyChallenge = { date: todayStr(), text: label };
+    data.dailyChallenge = { date: todayStr(), text: item.label, detail: item.detail, benefit: item.benefit };
     saveData();
     screenState = 'weeks';
   }
