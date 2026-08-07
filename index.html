@@ -341,11 +341,11 @@ const mascotMessages = {
     'ภูมิใจในตัวหนูมากเลยนะ 💚',
   ],
   streak3: [
-    'ต่อเนื่อง 3 วันแล้ว! หนูเจ๋งมาก 🔥',
+    'เช็คอินต่อเนื่อง 3 ครั้งแล้ว! หนูเจ๋งมาก 🔥',
     'ทำได้ต่อเนื่องขนาดนี้ สุดยอดไปเลย!',
   ],
   streak7: [
-    '7 วันติดต่อกัน! หนูคือนักสู้สุขภาพตัวจริง 🏆',
+    'เช็คอินต่อเนื่อง 7 ครั้ง! หนูคือนักสู้สุขภาพตัวจริง 🏆',
     'ไฟลุกเลย! ต่อเนื่อง 7 วันแล้วนะเนี่ย 🔥🔥',
   ],
   bmiNormal: [
@@ -375,40 +375,52 @@ function mascotBubble(key, emoji){
   return `<div class="mascot-row"><div class="m-emoji">${emoji}</div><div class="m-bubble">${escapeHtml(msg)}</div></div>`;
 }
 
-// ---- Streak (consecutive check-in days), Duolingo-style ----
-function yesterdayStr(){
-  const d = new Date();
-  d.setDate(d.getDate()-1);
-  return d.toISOString().slice(0,10);
-}
-function updateStreak(){
-  if(!data.streak) data.streak = { count:0, lastDate:null };
-  const today = todayStr();
-  if(data.streak.lastDate === today){
-    // already checked in today, no change
-  }else if(data.streak.lastDate === yesterdayStr()){
-    data.streak.count = (data.streak.count||0) + 1;
-    data.streak.lastDate = today;
-  }else{
-    data.streak.count = 1;
-    data.streak.lastDate = today;
+// ---- Check-in schedule: only Wednesday & Saturday, before 18:00 ----
+// Each program week now only needs 2 check-ins (พุธ + เสาร์) instead of 7.
+const CHECKIN_DOW = { wed: 3, sat: 6 }; // JS Date#getDay(): Sun=0 ... Wed=3 ... Sat=6
+const CHECKIN_DAY_LABEL = { wed: 'วันพุธ', sat: 'วันเสาร์' };
+const CHECKIN_DEADLINE_HOUR = 18; // must check in before 18:00
+
+function todayDow(){ return new Date().getDay(); }
+function isPastCheckinDeadline(){ return new Date().getHours() >= CHECKIN_DEADLINE_HOUR; }
+
+// Finds the next unfilled check-in slot across the whole program, in
+// order: Week1.wed, Week1.sat, Week2.wed, Week2.sat, ... Returns null once
+// every week is fully checked in.
+function getNextSlot(){
+  for(let wi=0; wi<data.weeks.length; wi++){
+    const w = data.weeks[wi];
+    if(!w.slots) w.slots = { wed:null, sat:null };
+    if(!w.slots.wed) return { weekIndex:wi, slot:'wed' };
+    if(!w.slots.sat) return { weekIndex:wi, slot:'sat' };
   }
+  return null;
 }
-// Streak only "counts" for display if the last check-in was today or
-// yesterday — otherwise it's effectively broken even if we haven't
-// overwritten the stored count yet (that only happens on the next check-in).
+function weekSlotCount(w){
+  if(!w || !w.slots) return 0;
+  return (w.slots.wed?1:0) + (w.slots.sat?1:0);
+}
+
+// ---- Streak: trailing run of consecutive completed Wed/Sat slots ----
+// Walks every slot in program order and resets the counter on any gap, so
+// what's left at the end is how many check-ins in a row (most recent
+// first) the child has completed without missing one.
+// Because check-ins only ever happen at the current "next" slot (in strict
+// wed→sat→wed→sat order), there's never a completed slot sitting after an
+// empty one — so the streak is simply the total number of completed
+// check-ins so far. A missed deadline just delays that slot; it doesn't
+// let the child skip ahead, so nothing here can create an interior gap.
 function getDisplayStreak(){
-  if(!data.streak || !data.streak.lastDate) return 0;
-  const today = todayStr();
-  if(data.streak.lastDate === today || data.streak.lastDate === yesterdayStr()) return data.streak.count || 0;
-  return 0;
+  return data.weeks.reduce((sum,w)=> sum + weekSlotCount(w), 0);
 }
-// A single global "last check-in date" (same field the streak uses) means
-// once ANY week's check-in is completed today, no more check-ins — of any
-// week — can happen until tomorrow. This is what enforces "one day at a
-// time, no skipping ahead to fill in future days."
+// A single global "last check-in date" prevents checking in twice on the
+// same real-world day (e.g. re-opening the app after finishing today).
 function hasCheckedInToday(){
   return !!(data.streak && data.streak.lastDate === todayStr());
+}
+function markCheckedInToday(){
+  if(!data.streak) data.streak = { lastDate:null };
+  data.streak.lastDate = todayStr();
 }
 
 // Basic sanity check that free-typed text looks like a food/dish name:
@@ -543,19 +555,27 @@ const ADMIN_PASSWORD = 'kidhealth2026'; // demo password for the admin dashboard
 const GOOGLE_SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby_cnTC-BG9KclNLyNvDkFVVTEbIrK6XMX8JWBvrie1LDzC38n0fKwHQV3xKIh1VO1V/exec'; // e.g. 'https://script.google.com/macros/s/AKfycb.../exec'
 const GOOGLE_SHEETS_VIEW_URL = 'https://docs.google.com/spreadsheets/d/1KVricI0FjeKnxRFZALhOBx6swgkhX0GKWRiAMKu0Dok/edit?usp=sharing';   // e.g. 'https://docs.google.com/spreadsheets/d/XXXXX/edit'
 
+// Each week now has exactly 2 check-in slots: wed (พุธ) and sat (เสาร์).
+// slots.wed / slots.sat hold the log object once filled, or null if not
+// checked in yet.
 const defaultState = {
   profile: { lang:'th', name:'', weight:'', height:'', bmi:null },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
-  weeks: [ { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] }, { done:0, logs:[] } ],
+  weeks: [
+    { slots:{ wed:null, sat:null } },
+    { slots:{ wed:null, sat:null } },
+    { slots:{ wed:null, sat:null } },
+    { slots:{ wed:null, sat:null } },
+  ],
   onboarded: false,
   playerId: null,
   dailyChallenge: null, // { date:'YYYY-MM-DD', text:'...' }
   dailyFood: null, // { date:'YYYY-MM-DD', text:'...' }
-  streak: { count:0, lastDate:null },
+  streak: { lastDate:null },
 };
 let data = JSON.parse(JSON.stringify(defaultState));
 let screenState = 'loading';
-let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise(), wheel:null, adminPlayers:[] };
+let ctx = { activeWeek:0, meals: freshMeals(), mealIndex:0, exercise: freshExercise(), wheel:null, adminPlayers:[], checkinSlot:null };
 
 // Login state
 let currentUsername = ''; // display username, shown in the UI
@@ -568,12 +588,12 @@ function todayStr(){
 }
 
 const wheelRewardSegments = [
-  { label:'เก่งมาก! 🌟', color:'#FF6B4A' },
-  { label:'สุดยอดไปเลย 💪', color:'#4ECDC4' },
-  { label:'นักสู้สุขภาพ 🏅', color:'#FFC857' },
-  { label:'ดาว 1 ดวง ⭐', color:'#FF6B4A' },
-  { label:'ยิ้มเก่งมาก 😄', color:'#4ECDC4' },
-  { label:'พลังเต็มร้อย 🔋', color:'#FFC857' },
+  { label:'⭐ ดาว 1', color:'#FF6B4A' },
+  { label:'⭐ ดาว 2', color:'#4ECDC4' },
+  { label:'⭐ ดาว 3', color:'#FFC857' },
+  { label:'⭐ ดาว 4', color:'#FF6B4A' },
+  { label:'⭐ ดาว 5', color:'#4ECDC4' },
+  { label:'⭐ ดาว 6', color:'#FFC857' },
 ];
 const wheelChallengeSegments = [
   { label:'ดื่มน้ำ 8 แก้ว 💧', color:'#FF6B4A' },
@@ -624,11 +644,19 @@ async function loadUserData(){
     data = JSON.parse(JSON.stringify(defaultState));
   }
   if(Array.isArray(data.weeks)){
-    data.weeks.forEach(w=>{ if(!Array.isArray(w.logs)) w.logs = []; });
+    data.weeks.forEach(w=>{
+      if(!w.slots){
+        // Migrate old daily "{done, logs[]}" data (7 check-ins/week) into
+        // the new "{slots:{wed,sat}}" format (2 check-ins/week) — best
+        // effort: carry over the first two logs as the wed/sat entries.
+        const oldLogs = Array.isArray(w.logs) ? w.logs : [];
+        w.slots = { wed: oldLogs[0] || null, sat: oldLogs[1] || null };
+      }
+    });
   }
   if(!data.playerId) data.playerId = currentUid;
   if(data.dailyFood === undefined) data.dailyFood = null;
-  if(!data.streak) data.streak = { count:0, lastDate:null };
+  if(!data.streak) data.streak = { lastDate:null };
 }
 
 async function saveData(){
@@ -700,11 +728,11 @@ async function syncPlayerRecord(){
     weight: data.profile.weight || '',
     height: data.profile.height || '',
     quizScore: data.quiz.submitted ? data.quiz.score : null,
-    weeks: data.weeks.map(w=>w.done),
-    weeksDetail: data.weeks.map(w=> (w.logs||[])), // full day-by-day logs, per week
+    weeks: data.weeks.map(w=>weekSlotCount(w)),
+    weeksDetail: data.weeks.map(w=> [w.slots && w.slots.wed, w.slots && w.slots.sat].filter(Boolean)), // wed/sat logs, per week
     dailyChallenge: data.dailyChallenge || null,
     dailyFood: data.dailyFood || null,
-    totalDays: data.weeks.reduce((sum,w)=>sum+w.done,0),
+    totalDays: data.weeks.reduce((sum,w)=>sum+weekSlotCount(w),0),
     updatedAt: new Date().toISOString(),
   };
   try{
@@ -813,11 +841,11 @@ function exportAdminExcel(){
         'น้ำหนัก (กก.)': p.weight || '',
         'ส่วนสูง (ซม.)': p.height || '',
         'คะแนนควิซ': p.quizScore!=null ? `${p.quizScore}/3` : 'ยังไม่ทำ',
-        'Week 1 (วัน)': weeks[0] || 0,
-        'Week 2 (วัน)': weeks[1] || 0,
-        'Week 3 (วัน)': weeks[2] || 0,
-        'Week 4 (วัน)': weeks[3] || 0,
-        'รวมวันทั้งหมด': p.totalDays || 0,
+        'สัปดาห์ 1 (ครั้ง/2)': weeks[0] || 0,
+        'สัปดาห์ 2 (ครั้ง/2)': weeks[1] || 0,
+        'สัปดาห์ 3 (ครั้ง/2)': weeks[2] || 0,
+        'สัปดาห์ 4 (ครั้ง/2)': weeks[3] || 0,
+        'รวมครั้งทั้งหมด': p.totalDays || 0,
         'ภารกิจออกกำลังกายวันนี้': (p.dailyChallenge && p.dailyChallenge.date===today) ? p.dailyChallenge.text : '',
         'เมนูอาหารแนะนำวันนี้': (p.dailyFood && p.dailyFood.date===today) ? p.dailyFood.text : '',
         'อัปเดตล่าสุด': p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH') : '',
@@ -842,7 +870,8 @@ function exportAdminExcel(){
           detailRows.push({
             'ชื่อ-นามสกุล': p.name || '(ไม่ระบุชื่อ)',
             'สัปดาห์': wi+1,
-            'วันที่ (ลำดับในสัปดาห์)': log.day,
+            'วัน': log.dayLabel || (log.slot ? CHECKIN_DAY_LABEL[log.slot] : ''),
+            'วันที่': log.date || '',
             'มื้ออาหาร': mealSummary,
             'ออกกำลังกาย': exSummary,
             'รางวัลที่ได้รับ': log.reward || '',
@@ -1052,14 +1081,30 @@ const builders = {
 
   weeks: () => {
     const items = data.weeks.map((w,i)=>{
-      const locked = i>0 && data.weeks[i-1].done < 7;
-      const complete = w.done>=7;
-      const label = complete ? `<span class="badge-complete">เสร็จแล้ว</span>` : locked ? `<span class="badge-lock">🔒</span>` : `<span class="badge-done">${w.done}/7 วัน</span>`;
+      const count = weekSlotCount(w);
+      const locked = i>0 && weekSlotCount(data.weeks[i-1]) < 2;
+      const complete = count>=2;
+      const label = complete ? `<span class="badge-complete">เสร็จแล้ว</span>` : locked ? `<span class="badge-lock">🔒</span>` : `<span class="badge-done">${count}/2 ครั้ง</span>`;
       return `<div class="week-item ${locked?'locked':''}" data-week="${i}" ${locked?'':'data-clickable="1"'}>
-        <div><div class="wname">Week ${i+1}</div><div class="wstatus">${locked?'ยังไม่ปลดล็อก':(complete?'ครบ 7 วันแล้ว':'กำลังทำอยู่')}</div></div>
+        <div><div class="wname">สัปดาห์ ${i+1}</div><div class="wstatus">${locked?'ยังไม่ปลดล็อก':(complete?'เช็คอินครบแล้ว':'กำลังทำอยู่')}</div></div>
         ${label}
       </div>`;
     }).join('');
+    const nextSlot = getNextSlot();
+    const scheduleNoteHtml = (()=>{
+      if(!nextSlot) return '';
+      const requiredDow = CHECKIN_DOW[nextSlot.slot];
+      const requiredLabel = CHECKIN_DAY_LABEL[nextSlot.slot];
+      const isRightDay = todayDow()===requiredDow;
+      const pastDeadline = isPastCheckinDeadline();
+      if(isRightDay && pastDeadline && !hasCheckedInToday()){
+        return `<div class="challenge-banner" style="border-color:var(--red);"><div class="clabel">⏰ เลยเวลาแล้ว</div><div class="ctext" style="font-size:12.5px;">วันนี้เลย 18:00 น. แล้ว หนูพลาดการเช็คอินของวันนี้นะ อย่าลืมกลับมาเช็คอินให้ทันใน${requiredLabel}ครั้งหน้านะ 💛</div></div>`;
+      }
+      if(!isRightDay){
+        return `<div style="font-size:11px; color:var(--ink-soft); text-align:center; margin-top:8px;">เช็คอินครั้งถัดไป: <b>${requiredLabel}</b> ก่อนเวลา 18:00 น.</div>`;
+      }
+      return '';
+    })();
     const bmiGroup = getBmiWheelGroup();
     const hasChallengeToday = data.dailyChallenge && data.dailyChallenge.date === todayStr();
     const challengeHtml = !bmiGroup ? '' : (hasChallengeToday
@@ -1071,7 +1116,7 @@ const builders = {
       : `<button class="ghost-btn" id="toFoodWheel" style="margin-top:8px;">🍽️ หมุนสุ่มเมนูอาหารวันนี้</button>`);
     const bmiNoteHtml = bmiGroup ? '' : `<div style="font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:8px;">วงล้อภารกิจ/เมนูอาหารจะปลดล็อกสำหรับกลุ่ม BMI น้ำหนักเกินขึ้นไปนะ</div>`;
     const streak = getDisplayStreak();
-    const streakHtml = streak>0 ? `<span class="streak-chip">🔥 ${streak} วันติดต่อกัน</span>` : '';
+    const streakHtml = streak>0 ? `<span class="streak-chip">🔥 ${streak} ครั้งติดต่อกัน</span>` : '';
     return `
     <div class="topbar"><span class="screen-tag">โปรแกรม</span></div>
     <div class="screen-content">
@@ -1080,6 +1125,7 @@ const builders = {
       <div class="user-chip">เข้าสู่ระบบเป็น ${escapeHtml(currentUsername || '')}</div>
       ${streakHtml ? `<div style="text-align:center; margin-top:4px;">${streakHtml}</div>` : ''}
       ${mascotBubble('welcome')}
+      ${scheduleNoteHtml}
       ${challengeHtml}
       ${foodHtml}
       ${bmiNoteHtml}
@@ -1092,20 +1138,27 @@ const builders = {
 
   weekDetail: () => {
     const w = data.weeks[ctx.activeWeek];
-    const cells = Array.from({length:7}, (_,i)=>{
-      const dayNum = i+1;
-      const done = dayNum <= w.done;
-      const isToday = dayNum === w.done+1;
-      return `<div class="day-cell ${done?'done':''} ${isToday?'today':''}">${done?'✓':dayNum}</div>`;
-    }).join('');
-    const finished = w.done>=7;
-    const checkedInToday = hasCheckedInToday();
+    if(!w.slots) w.slots = { wed:null, sat:null };
+    const slotOrder = ['wed','sat'];
+    const nextSlot = getNextSlot();
 
-    const logsHtml = w.logs && w.logs.length ? `
-      <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา (แตะเพื่อแก้ไข)</div>
+    const cells = slotOrder.map(slot=>{
+      const done = !!w.slots[slot];
+      const isNext = nextSlot && nextSlot.weekIndex===ctx.activeWeek && nextSlot.slot===slot;
+      const dayLetter = slot==='wed' ? 'พ' : 'ส';
+      return `<div class="day-cell ${done?'done':''} ${isNext?'today':''}">${done?'✓':dayLetter}</div>`;
+    }).join('');
+
+    const count = weekSlotCount(w);
+    const finished = count>=2;
+
+    // Locked once saved — no editing, so kids can't retroactively change a
+    // past check-in (no click handler, no "แก้ไข" affordance).
+    const logsHtml = (w.slots.wed || w.slots.sat) ? `
+      <div class="field-label" style="margin-top:14px;">บันทึกที่ผ่านมา</div>
       <div class="week-list" style="gap:6px;">
-        ${w.logs.slice().reverse().map((l,revIdx)=>{
-          const origIdx = w.logs.length - 1 - revIdx;
+        ${slotOrder.filter(slot=> w.slots[slot]).map(slot=>{
+          const l = w.slots[slot];
           let mealLines;
           if(Array.isArray(l.meals)){
             mealLines = l.meals.map(m=>{
@@ -1115,9 +1168,7 @@ const builders = {
               return `${escapeHtml(m.name)}: ${detail}`;
             }).join(' · ');
           }else{
-            mealLines = l.eaten
-              ? (l.food ? escapeHtml(l.food) : (l.tags && l.tags.length ? escapeHtml(l.tags.join(', ')) : 'ทานข้าวแล้ว'))
-              : 'ยังไม่ได้ทานข้าว';
+            mealLines = '';
           }
           let exLine = '';
           if(l.exercise){
@@ -1126,73 +1177,51 @@ const builders = {
               : '🏃 ไม่ได้ออกกำลังกาย';
           }
           const rewardLine = l.reward ? `<div class="lex">🎁 ${escapeHtml(l.reward)}</div>` : '';
-          return `<div class="log-item" data-log-idx="${origIdx}"><div class="lday">วันที่ ${l.day}<span class="ledit">✏️ แก้ไข</span></div><div class="lmeal">${mealLines}</div>${exLine ? `<div class="lex">${exLine}</div>` : ''}${rewardLine}</div>`;
+          return `<div class="log-item" style="cursor:default;"><div class="lday">${CHECKIN_DAY_LABEL[slot]}${l.date ? ' · '+escapeHtml(l.date) : ''}</div><div class="lmeal">${mealLines}</div>${exLine ? `<div class="lex">${exLine}</div>` : ''}${rewardLine}</div>`;
         }).join('')}
       </div>` : '';
 
+    // Figure out whether THIS week's check-in button should be enabled.
+    let checkinState = 'finished';
+    let requiredLabel = '';
+    if(!finished){
+      if(!nextSlot || nextSlot.weekIndex !== ctx.activeWeek){
+        checkinState = 'notThisWeek';
+      }else{
+        requiredLabel = CHECKIN_DAY_LABEL[nextSlot.slot];
+        const rightDay = todayDow()===CHECKIN_DOW[nextSlot.slot];
+        if(hasCheckedInToday()) checkinState = 'doneToday';
+        else if(!rightDay) checkinState = 'wrongDay';
+        else if(isPastCheckinDeadline()) checkinState = 'missed';
+        else checkinState = 'ready';
+      }
+    }
+
+    const actionHtml = (()=>{
+      if(checkinState==='finished') return `<button class="big-btn" id="backToWeeks2">กลับไปหน้าสัปดาห์</button>`;
+      if(checkinState==='doneToday') return `<div class="challenge-banner" style="text-align:center;"><div class="ctext">✅ วันนี้เช็คอินไปแล้ว มาต่ออีกทีนะ</div></div>`;
+      if(checkinState==='ready') return `<button class="big-btn" id="toCheckin">เช็คอินวันนี้ (${requiredLabel})</button>`;
+      if(checkinState==='missed') return `<div class="challenge-banner" style="text-align:center; border-color:var(--red);"><div class="ctext">⏰ เลยเวลา 18:00 น. แล้วนะ รอ${requiredLabel}ครั้งหน้านะ</div></div>`;
+      return `<div class="challenge-banner" style="text-align:center;"><div class="ctext">🗓️ เช็คอินได้เฉพาะ${requiredLabel||'วันที่กำหนด'} ก่อน 18:00 น.</div></div>`;
+    })();
+
     return `
-    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1}</span><span class="back-link" id="backToWeeks">‹ สัปดาห์ทั้งหมด</span></div>
+    <div class="topbar"><span class="screen-tag">สัปดาห์ ${ctx.activeWeek+1}</span><span class="back-link" id="backToWeeks">‹ สัปดาห์ทั้งหมด</span></div>
     <div class="screen-content">
-      <div class="title-row"><span class="icon">🗓️</span><div class="h2">Week ${ctx.activeWeek+1}</div></div>
-      <div class="progress-track"><div class="progress-fill" style="width:${(w.done/7*100)}%"></div></div>
-      <div class="progress-label">${w.done}/7 วัน</div>
-      <div class="day-grid">${cells}</div>
+      <div class="title-row"><span class="icon">🗓️</span><div class="h2">สัปดาห์ ${ctx.activeWeek+1}</div></div>
+      <div class="progress-track"><div class="progress-fill" style="width:${(count/2*100)}%"></div></div>
+      <div class="progress-label">${count}/2 ครั้ง (วันพุธ + วันเสาร์)</div>
+      <div class="day-grid" style="grid-template-columns:repeat(2,1fr); max-width:160px; margin:14px auto;">${cells}</div>
       ${logsHtml}
       <div style="margin-top:auto;"></div>
-      ${finished
-        ? `<button class="big-btn" id="backToWeeks2">กลับไปหน้าสัปดาห์</button>`
-        : (checkedInToday
-            ? `<div class="challenge-banner" style="text-align:center;"><div class="ctext">✅ วันนี้เช็คอินไปแล้ว มาต่ออีกทีพรุ่งนี้นะ</div></div>`
-            : `<button class="big-btn" id="toCheckin">เช็คอินวันนี้</button>`)}
-    </div>`;
-  },
-
-  editLog: () => {
-    const d = ctx.editDraft;
-    const mealsHtml = d.meals.map((m,mi)=>`
-      <div class="quiz-card">
-        <div class="quiz-q">${escapeHtml(mealNames[mi])}</div>
-        <div class="yn-row">
-          <button class="yn-btn yes ${m.eaten===true?'active':''}" data-meal-idx="${mi}" data-val="yes">Yes</button>
-          <button class="yn-btn no ${m.eaten===false?'active':''}" data-meal-idx="${mi}" data-val="no">No</button>
-        </div>
-        ${m.eaten===true ? `
-          <input class="field editFoodInput" data-meal-idx="${mi}" list="foodSuggestions" placeholder="พิมพ์เมนูอาหาร..." value="${escapeHtml(m.food)}" style="margin-top:10px;"/>
-          <div class="food-tags" style="margin-top:8px;">
-            ${foodTagOptions.map(t=>`<div class="food-tag ${m.tags.includes(t)?'on':''}" data-meal-idx="${mi}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
-          </div>` : ''}
-      </div>`).join('');
-    const ex = d.exercise;
-    const exerciseHtml = `
-      <div class="quiz-card">
-        <div class="quiz-q">ออกกำลังกาย</div>
-        <div class="yn-row">
-          <button class="yn-btn yes ${ex.done===true?'active':''}" id="editExYes">Yes</button>
-          <button class="yn-btn no ${ex.done===false?'active':''}" id="editExNo">No</button>
-        </div>
-        ${ex.done===true ? `
-          <div class="food-tags" style="margin-top:8px;">
-            ${exerciseTagOptions.map(t=>`<div class="food-tag ${ex.type===t?'on':''}" data-etag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
-          </div>
-          <input class="field" id="editDurationInput" type="number" placeholder="ระยะเวลา (นาที)" value="${escapeHtml(ex.duration)}" style="margin-top:8px;"/>` : ''}
-      </div>`;
-    return `
-    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · แก้ไข</span><span class="back-link" id="editCancel">‹ ยกเลิก</span></div>
-    <div class="screen-content">
-      <div class="title-row"><span class="icon">✏️</span><div class="h2">แก้ไขบันทึก วันที่ ${d.day}</div></div>
-      ${mealsHtml}
-      ${exerciseHtml}
-      <div class="error-msg" id="editErr"></div>
-      <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="editSaveBtn">บันทึกการแก้ไข</button>
-      <button class="ghost-btn" id="editCancel2">ยกเลิก</button>
+      ${actionHtml}
     </div>`;
   },
 
   checkin: () => `
-    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · เช็คอิน</span><span class="back-link" id="backToWeekDetail">‹ ยกเลิก</span></div>
+    <div class="topbar"><span class="screen-tag">สัปดาห์ ${ctx.activeWeek+1} · เช็คอิน</span><span class="back-link" id="backToWeekDetail">‹ ยกเลิก</span></div>
     <div class="screen-content">
-      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอินวันนี้</div></div>
+      <div class="title-row"><span class="icon">🍽️</span><div class="h2">เช็คอิน${ctx.checkinSlot ? ' ('+CHECKIN_DAY_LABEL[ctx.checkinSlot]+')' : 'วันนี้'}</div></div>
       <div class="progress-track"><div class="progress-fill" style="width:${(ctx.mealIndex/totalSteps*100)}%"></div></div>
       <div class="progress-label">ขั้นตอนที่ ${ctx.mealIndex+1}/${totalSteps} · ${mealNames[ctx.mealIndex]}</div>
       <div class="checkin-card">
@@ -1208,7 +1237,7 @@ const builders = {
   foodlogSingle: () => {
     const m = ctx.meals[ctx.mealIndex];
     return `
-    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · บันทึกอาหาร</span><span class="back-link" id="backToCheckin">‹ ย้อนกลับ</span></div>
+    <div class="topbar"><span class="screen-tag">สัปดาห์ ${ctx.activeWeek+1} · บันทึกอาหาร</span><span class="back-link" id="backToCheckin">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">🍱</span><div class="h2">${mealNames[ctx.mealIndex]} กินอะไรไปบ้าง?</div></div>
       <div class="progress-track"><div class="progress-fill" style="width:${(ctx.mealIndex/totalSteps*100)}%"></div></div>
@@ -1225,7 +1254,7 @@ const builders = {
   },
 
   exercise: () => `
-    <div class="topbar"><span class="screen-tag">Week ${ctx.activeWeek+1} · ออกกำลังกาย</span><span class="back-link" id="backToWeekDetail">‹ ยกเลิก</span></div>
+    <div class="topbar"><span class="screen-tag">สัปดาห์ ${ctx.activeWeek+1} · ออกกำลังกาย</span><span class="back-link" id="backToWeekDetail">‹ ยกเลิก</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">🏃</span><div class="h2">ออกกำลังกายวันนี้</div></div>
       <div class="progress-track"><div class="progress-fill" style="width:${(mealNames.length/totalSteps*100)}%"></div></div>
@@ -1238,15 +1267,16 @@ const builders = {
         </div>
       </div>
       ${ctx.exercise.done===true ? `
-        <div class="field-label" style="margin-top:14px;">ประเภทกิจกรรม</div>
+        <div class="field-label" style="margin-top:14px;">ประเภทกิจกรรม (เลือก 1 อย่าง)</div>
         <div class="food-tags">
           ${exerciseTagOptions.map(t=>`<div class="food-tag ${ctx.exercise.type===t?'on':''}" data-etag="${escapeHtml(t)}">${escapeHtml(t)}</div>`).join('')}
         </div>
         <div class="field-label">ระยะเวลา (นาที)</div>
         <input class="field" id="durationInput" type="number" placeholder="เช่น 20" value="${escapeHtml(ctx.exercise.duration)}" />
       ` : ''}
+      <div class="error-msg" id="exerciseErr"></div>
       <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="exerciseNext" ${ctx.exercise.done===null?'disabled':''}>เสร็จสิ้น</button>
+      <button class="big-btn" id="exerciseNext" ${(ctx.exercise.done===null || (ctx.exercise.done===true && !ctx.exercise.type))?'disabled':''}>เสร็จสิ้น</button>
     </div>`,
 
   dayDone: () => {
@@ -1258,13 +1288,43 @@ const builders = {
         <div class="em">🎉</div>
         <div class="h2">${bounceText('เก่งมาก! เช็คอินสำเร็จ')}</div>
         <div style="font-size:12.5px; color:var(--ink-soft); margin-top:6px;">วันนี้ทำสำเร็จแล้ว เจอกันพรุ่งนี้นะ</div>
-        ${streak>1 ? `<div style="margin-top:10px;"><span class="streak-chip">🔥 ต่อเนื่อง ${streak} วัน</span></div>` : ''}
+        ${streak>1 ? `<div style="margin-top:10px;"><span class="streak-chip">🔥 ต่อเนื่อง ${streak} ครั้ง</span></div>` : ''}
         ${mascotBubble(mascotKey)}
       </div>
-      <button class="big-btn" id="toRewardWheel">🎁 หมุนวงล้อรับของรางวัล</button>
-      <button class="ghost-btn" id="backToWeekDetail2">กลับไปหน้า Week ${ctx.activeWeek+1}</button>
+      <button class="big-btn" id="toRewardWheel">➡️ ไปต่อกันเลย</button>
+      <button class="ghost-btn" id="backToWeekDetail2">กลับไปหน้าสัปดาห์ ${ctx.activeWeek+1}</button>
     </div>`;
   },
+
+  // Shown once right after check-in, before spinning the reward wheel —
+  // same nutrition message for every child regardless of BMI color group.
+  knowledge: () => `
+    <div class="screen-content" style="align-items:center;">
+      <div class="mascot">🥗</div>
+      <div class="h2" style="text-align:center; margin-bottom:10px;">${bounceText('อย่าหนีกันนะน้องๆ')}</div>
+      <div class="quiz-card" style="width:100%;">
+        <div style="font-size:13px; line-height:1.9; color:var(--ink);">
+          อยากมีสุขภาพที่ดีมาฟังตรงนี้นะ 💚<br/>
+          น้องๆ รู้ไหมว่าเราควรได้รับประทานอาหารหมู่ต่าง ๆ ใน 1 วันดังนี้:
+        </div>
+        <ul style="font-size:12.5px; line-height:1.9; color:var(--ink-soft); padding-left:18px; margin:10px 0;">
+          <li>นมจืด 1-2 แก้ว ลดการรับประทานนมสดไขมันเต็ม</li>
+          <li>ไข่ 1 ฟอง ข้าวครบ 3 มื้อ ครบ 5 หมู่ รับประทานอาหารเป็นเวลา</li>
+          <li>เนื้อสัตว์สุกที่มีไขมันต่ำหรือไม่ติดไขมัน เช่น ปลา หมู อกไก่</li>
+          <li>ผักใบเขียวและผลไม้รสไม่หวานจัด เช่น กล้วย ส้ม แอปเปิ้ล</li>
+        </ul>
+        <div style="font-size:13px; font-weight:600; color:var(--red); margin-top:4px;">สิ่งที่น้องๆ ควรหลีกเลี่ยง:</div>
+        <div style="font-size:12.5px; line-height:1.9; color:var(--ink-soft); margin-top:4px;">
+          น้ำหวาน น้ำอัดลม ขนมหวาน ของหวาน ของทอด ของมัน<br/>
+          รวมถึงอาหารไขมันสูง เช่น ไส้กรอก แฮม เบคอน กุนเชียง
+        </div>
+        <div style="font-size:13px; line-height:1.8; color:var(--ink); margin-top:10px; text-align:center;">
+          แล้วเรามามีสุขภาพที่ดีไปด้วยกันนะคะ อย่าลืมออกกำลังกายนะ 💪
+        </div>
+      </div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toRewardWheelFromKnowledge">🎁 ไปหมุนของรางวัลกันเลย</button>
+    </div>`,
 
   wheel: () => {
     const w = ctx.wheel;
@@ -1320,12 +1380,12 @@ const builders = {
   adminDashboard: () => {
     const players = ctx.adminPlayers || [];
     const rows = players.length ? players.map(p=>{
-      const weeksStr = (p.weeks||[]).map((d,i)=>`W${i+1}: ${d}/7`).join(' · ');
+      const weeksStr = (p.weeks||[]).map((d,i)=>`สัปดาห์${i+1}: ${d}/2`).join(' · ');
       const updated = p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}) : '-';
       return `<div class="admin-row">
         <div class="aname">${escapeHtml(p.name || '(ไม่ระบุชื่อ)')}</div>
         <div class="ameta">ควิซ ${p.quizScore!=null ? p.quizScore+'/3' : '-'}</div>
-        <div class="ameta">${weeksStr || '-'} · รวม ${p.totalDays||0} วัน</div>
+        <div class="ameta">${weeksStr || '-'} · รวม ${p.totalDays||0} ครั้ง</div>
         <div class="ameta" style="opacity:.7;">อัปเดตล่าสุด ${updated}</div>
       </div>`;
     }).join('') : `<div style="font-size:12.5px; color:var(--ink-soft); text-align:center; margin-top:24px;">ยังไม่มีข้อมูลผู้เล่น</div>`;
@@ -1475,16 +1535,21 @@ function bindInteractions(s){
 
   if(s==='weekDetail'){
     document.getElementById('backToWeeks').addEventListener('click', ()=>{ screenState='weeks'; render(); });
-    screenEl.querySelectorAll('.log-item[data-log-idx]').forEach(li=> li.addEventListener('click', ()=>{
-      openEditLog(ctx.activeWeek, parseInt(li.dataset.logIdx));
-    }));
-    const finished = data.weeks[ctx.activeWeek].done>=7;
+    // Log entries are intentionally NOT clickable — locked once saved so
+    // kids can't retroactively edit a past check-in.
+    const finished = weekSlotCount(data.weeks[ctx.activeWeek])>=2;
     if(finished){
-      document.getElementById('backToWeeks2').addEventListener('click', ()=>{ screenState='weeks'; render(); });
+      const backBtn2 = document.getElementById('backToWeeks2');
+      if(backBtn2) backBtn2.addEventListener('click', ()=>{ screenState='weeks'; render(); });
     }else{
       const checkinBtn = document.getElementById('toCheckin');
       if(checkinBtn) checkinBtn.addEventListener('click', ()=>{
-        if(hasCheckedInToday()){ screenState='weekDetail'; render(); return; } // shouldn't happen, but stay safe
+        const nextSlot = getNextSlot();
+        if(!nextSlot || nextSlot.weekIndex !== ctx.activeWeek) { render(); return; }
+        if(hasCheckedInToday()){ render(); return; }
+        if(todayDow() !== CHECKIN_DOW[nextSlot.slot]) { render(); return; }
+        if(isPastCheckinDeadline()) { render(); return; }
+        ctx.checkinSlot = nextSlot.slot;
         ctx.meals = freshMeals();
         ctx.mealIndex = 0;
         ctx.exercise = freshExercise();
@@ -1549,13 +1614,25 @@ function bindInteractions(s){
     if(durInp) durInp.addEventListener('input', ()=>{ ctx.exercise.duration = durInp.value; });
     document.getElementById('exerciseNext').addEventListener('click', ()=>{
       if(durInp) ctx.exercise.duration = durInp.value.trim();
+      if(ctx.exercise.done===true && !ctx.exercise.type){
+        document.getElementById('exerciseErr').textContent = 'กรุณาเลือกประเภทกิจกรรมออกกำลังกายก่อนนะ';
+        return;
+      }
+      if(ctx.exercise.done===true && !ctx.exercise.duration){
+        document.getElementById('exerciseErr').textContent = 'กรุณากรอกระยะเวลาที่ออกกำลังกายก่อนนะ';
+        return;
+      }
       finishDay();
     });
   }
 
   if(s==='dayDone'){
-    document.getElementById('toRewardWheel').addEventListener('click', ()=> openWheel('reward'));
+    document.getElementById('toRewardWheel').addEventListener('click', ()=>{ screenState='knowledge'; render(); });
     document.getElementById('backToWeekDetail2').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
+  }
+
+  if(s==='knowledge'){
+    document.getElementById('toRewardWheelFromKnowledge').addEventListener('click', ()=> openWheel('reward'));
   }
 
   if(s==='wheel'){
@@ -1596,88 +1673,6 @@ function bindInteractions(s){
     if(syncAllBtn) syncAllBtn.addEventListener('click', syncAllToGoogleSheets);
   }
 
-  if(s==='editLog'){
-    document.getElementById('editCancel').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
-    document.getElementById('editCancel2').addEventListener('click', ()=>{ screenState='weekDetail'; render(); });
-
-    screenEl.querySelectorAll('.yn-btn[data-meal-idx]').forEach(b=> b.addEventListener('click', ()=>{
-      const mi = parseInt(b.dataset.mealIdx);
-      ctx.editDraft.meals[mi].eaten = b.dataset.val==='yes';
-      render();
-    }));
-    screenEl.querySelectorAll('.editFoodInput').forEach(inp=> inp.addEventListener('input', ()=>{
-      const mi = parseInt(inp.dataset.mealIdx);
-      ctx.editDraft.meals[mi].food = inp.value;
-    }));
-    screenEl.querySelectorAll('.food-tag[data-meal-idx]').forEach(t=> t.addEventListener('click', ()=>{
-      const mi = parseInt(t.dataset.mealIdx);
-      const tag = t.dataset.tag;
-      const tags = ctx.editDraft.meals[mi].tags;
-      ctx.editDraft.meals[mi].tags = tags.includes(tag) ? tags.filter(x=>x!==tag) : [...tags, tag];
-      render();
-    }));
-
-    document.getElementById('editExYes').addEventListener('click', ()=>{ ctx.editDraft.exercise.done = true; render(); });
-    document.getElementById('editExNo').addEventListener('click', ()=>{ ctx.editDraft.exercise.done = false; render(); });
-    screenEl.querySelectorAll('[data-etag]').forEach(t=> t.addEventListener('click', ()=>{
-      const tag = t.dataset.etag;
-      ctx.editDraft.exercise.type = (ctx.editDraft.exercise.type===tag) ? '' : tag;
-      render();
-    }));
-    const editDurInp = document.getElementById('editDurationInput');
-    if(editDurInp) editDurInp.addEventListener('input', ()=>{ ctx.editDraft.exercise.duration = editDurInp.value; });
-
-    document.getElementById('editSaveBtn').addEventListener('click', ()=>{
-      const d = ctx.editDraft;
-      const incomplete = d.meals.some(m=> m.eaten===null) || d.exercise.done===null;
-      if(incomplete){
-        document.getElementById('editErr').textContent = 'กรุณาตอบให้ครบทุกมื้อและออกกำลังกายก่อนบันทึก';
-        return;
-      }
-      const missingFood = d.meals.some(m=> m.eaten===true && !m.food.trim() && m.tags.length===0);
-      if(missingFood){
-        document.getElementById('editErr').textContent = 'กรุณาพิมพ์เมนูอาหาร หรือเลือกจากรายการให้ครบทุกมื้อที่ทานก่อนบันทึก';
-        return;
-      }
-      const invalidFood = d.meals.some(m=> m.eaten===true && m.food.trim() && !isValidFoodText(m.food));
-      if(invalidFood){
-        document.getElementById('editErr').textContent = 'ไม่พบเมนูนี้ในรายการที่รู้จักนะ ลองพิมพ์ชื่อเมนูให้ชัดเจน หรือเลือกจากที่แนะนำ (แตะแล้วจะมีตัวเลือกให้เลือก) หรือแตะแท็กด้านล่างแทนก็ได้';
-        return;
-      }
-      if(editDurInp) d.exercise.duration = editDurInp.value.trim();
-      const wk = data.weeks[ctx.editWeek];
-      wk.logs[ctx.editLogIndex] = {
-        day: d.day,
-        meals: d.meals.map((m,mi)=>({ name: mealNames[mi], eaten:m.eaten, food:m.food, tags:m.tags.slice() })),
-        exercise: { done:d.exercise.done, type:d.exercise.type, duration:d.exercise.duration },
-        reward: d.reward,
-      };
-      saveData();
-      screenState='weekDetail';
-      render();
-    });
-  }
-}
-
-function openEditLog(weekIndex, logIndex){
-  const log = data.weeks[weekIndex].logs[logIndex];
-  const meals = Array.isArray(log.meals)
-    ? log.meals.map(m=>({ eaten: m.eaten ?? null, food: m.food || '', tags: (m.tags||[]).slice() }))
-    : mealNames.map(()=>({ eaten: log.eaten ?? null, food: log.food || '', tags: (log.tags||[]).slice() }));
-  ctx.editWeek = weekIndex;
-  ctx.editLogIndex = logIndex;
-  ctx.editDraft = {
-    day: log.day,
-    meals,
-    exercise: {
-      done: log.exercise ? (log.exercise.done ?? null) : null,
-      type: log.exercise ? (log.exercise.type || '') : '',
-      duration: log.exercise ? (log.exercise.duration || '') : '',
-    },
-    reward: log.reward || null,
-  };
-  screenState = 'editLog';
-  render();
 }
 
 // ============ BMI-BASED WHEEL DATA (food menu + exercise plan) ============
@@ -1797,7 +1792,9 @@ function onWheelDone(){
   const item = w.segments[w.resultIndex];
   if(w.mode==='reward'){
     const wk = data.weeks[ctx.activeWeek];
-    if(wk.logs.length){ wk.logs[wk.logs.length-1].reward = item.label; }
+    if(wk.slots && ctx.checkinSlot && wk.slots[ctx.checkinSlot]){
+      wk.slots[ctx.checkinSlot].reward = item.label;
+    }
     saveData();
     screenState = 'weekDetail';
   }else if(w.mode==='food'){
@@ -1829,15 +1826,18 @@ function finishDay(){
     return;
   }
   const w = data.weeks[ctx.activeWeek];
-  if(w.done<7){
-    w.done++;
-    w.logs.push({
-      day: w.done,
+  if(!w.slots) w.slots = { wed:null, sat:null };
+  const slot = ctx.checkinSlot;
+  if(slot && !w.slots[slot]){
+    w.slots[slot] = {
+      slot,
+      dayLabel: CHECKIN_DAY_LABEL[slot],
+      date: todayStr(),
       meals: ctx.meals.map((m,mi)=>({ name: mealNames[mi], eaten: m.eaten, food: m.food, tags: m.tags.slice() })),
-      exercise: { done: ctx.exercise.done, type: ctx.exercise.type, duration: ctx.exercise.duration }
-    });
+      exercise: { done: ctx.exercise.done, type: ctx.exercise.type, duration: ctx.exercise.duration },
+    };
   }
-  updateStreak();
+  markCheckedInToday();
   saveData();
   screenState='dayDone';
   render();
