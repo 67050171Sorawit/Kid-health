@@ -414,7 +414,13 @@ const CHECKIN_DEADLINE_HOUR = 18; // must check in before 18:00
 // the Wed/Sat + 18:00 restriction, so a teacher/developer can check in any
 // day to preview the reward wheel and the knowledge screen. Remove/don't
 // share links with this param for the real, day-locked version kids use.
-const PREVIEW_MODE = new URLSearchParams(window.location.search).get('preview') === '1';
+//
+// 🚧 TEMP FOR PRESENTATION: FORCE_UNLOCK_SCHEDULE is set to true so the
+// day/time lock is OFF for everyone right now (no "?preview=1" needed) —
+// this makes it easy to record a demo video. Set it back to false once
+// the presentation is done to re-lock check-ins to Wed/Sat before 18:00.
+const FORCE_UNLOCK_SCHEDULE = true; // <-- set back to false after presenting
+const PREVIEW_MODE = FORCE_UNLOCK_SCHEDULE || new URLSearchParams(window.location.search).get('preview') === '1';
 
 function todayDow(){ return new Date().getDay(); }
 function isPastCheckinDeadline(){ return PREVIEW_MODE ? false : new Date().getHours() >= CHECKIN_DEADLINE_HOUR; }
