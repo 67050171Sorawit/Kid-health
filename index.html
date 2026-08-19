@@ -1257,7 +1257,11 @@ const builders = {
     const resultSubHtml = resultItem && (resultItem.detail || resultItem.benefit)
       ? `<div style="font-size:12px; color:var(--ink-soft); text-align:center; margin-top:4px;">${resultItem.detail ? escapeHtml(resultItem.detail) : ''}${resultItem.detail && resultItem.benefit ? ' · ' : ''}${resultItem.benefit ? 'ประโยชน์: '+escapeHtml(resultItem.benefit) : ''}</div>`
       : '';
-    const resultPhotoHtml = (resultItem && isFood)
+    // Show a photo for both the food wheel and the exercise/challenge wheel
+    // (only the reward wheel has no images, since its segments are just
+    // star colors). Falls back to the emoji card if there's no image, or
+    // if the image fails to load (onerror swap).
+    const resultPhotoHtml = (resultItem && !isReward)
       ? (resultItem.image
        ? `<img 
            src="${escapeHtml(getImageUrl(resultItem.image))}" 
@@ -1266,10 +1270,10 @@ const builders = {
            style="width:140px; height:140px; object-fit:cover; border-radius:16px; margin:10px auto 0; display:block; box-shadow:0 4px 12px rgba(0,0,0,.15);" 
          />
          <div style="width:140px; height:140px; margin:10px auto 0; border-radius:16px; background:#fff; border:1.5px solid var(--line); display:none; align-items:center; justify-content:center; font-size:60px; box-shadow:0 4px 12px rgba(0,0,0,.08);">
-           ${resultItem.emoji || '🍽️'}
+           ${resultItem.emoji || (isFood ? '🍽️' : '🎯')}
          </div>`
         : `<div style="width:140px; height:140px; margin:10px auto 0; border-radius:16px; background:#fff; border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:60px; box-shadow:0 4px 12px rgba(0,0,0,.08);">
-           ${resultItem.emoji || '🍽️'}
+           ${resultItem.emoji || (isFood ? '🍽️' : '🎯')}
          </div>`)
       : '';
     const doneLabel = isReward ? 'กลับไปหน้าสัปดาห์' : (isFood ? 'รับเมนูนี้' : 'เริ่มภารกิจนี้');
