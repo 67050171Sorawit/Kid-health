@@ -248,7 +248,9 @@ function escapeHtml(str){
   return String(str == null ? '' : str).replace(/[&<>"']/g, ch => ({
     '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
   }[ch]));
-  function getImageUrl(url){
+}
+
+function getImageUrl(url){
   if(!url) return '';
 
   // Google Drive: /file/d/FILE_ID/view...
@@ -259,7 +261,6 @@ function escapeHtml(str){
   }
 
   return url;
-}
 }
 
 const mealNames = ['มื้อเช้า','มื้อกลางวัน','มื้อเย็น'];
@@ -1630,7 +1631,7 @@ const bmiWheelData = {
         { label:'🥣 ข้าวต้มหมู+ไข่ต้ม', emoji:'🥣', detail:'ข้าวต้มหมู 1 ชามเล็ก + ไข่ต้ม 1 ฟอง' ,image:'https://drive.google.com/file/d/1snmTbVJZrUxHImFFm33H6cAxRCYC0M2_/view?usp=sharing'},
         { label:'🍈 ฝรั่ง', emoji:'🍈', detail:'ฝรั่ง 1 ผล',image:'https://drive.google.com/file/d/1UrZ68FAw7vyDW3NEgYtu8n6x2ddMTUvR/view?usp=sharing' },
         { label:'🐟 ข้าวกล้อง+ปลานึ่งมะนาว', emoji:'🐟', detail:'ข้าวกล้อง 1 ทัพพี + ปลานึ่งมะนาว 1 ฝ่ามือ + ผักลวก',image:'https://drive.google.com/file/d/1wk8odXM5jz1TEHyxNkAfk9AfdcalcaYJ/view?usp=sharing'},
-        { label:'🍌 กล้วยน้ำว้า+นมจืดไขมันต่ำ', emoji:'🍌', detail:'กล้วยน้ำว้า 1 ผล + นมจืดไขมันต่ำ 1 กล่อง', image:'https://drive.google.com/file/d/1_mNLfkltvCwuvishnuMVkLwgIlnz7mfa/view?usp=sharingg' },
+        { label:'🍌 กล้วยน้ำว้า+นมจืดไขมันต่ำ', emoji:'🍌', detail:'กล้วยน้ำว้า 1 ผล + นมจืดไขมันต่ำ 1 กล่อง', image:'https://drive.google.com/file/d/1_mNLfkltvCwuvishnuMVkLwgIlnz7mfa/view?usp=sharing' },
         { label:'🍗 ข้าวกล้อง+อกไก่ย่าง', emoji:'🍗', detail:'ข้าวกล้อง 1 ทัพพี + อกไก่ย่าง 1 ฝ่ามือ + แกงจืดเต้าหู้หมูสับ', image:'https://drive.google.com/file/d/1ty3MJVD1c2qHnkwolUlMIq-TIIOB1kla/view?usp=sharing' },
       ],
     },
