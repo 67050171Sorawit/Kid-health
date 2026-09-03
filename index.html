@@ -223,6 +223,17 @@
     color:#B5490A; background:#FFEEDD; border:1.5px solid #FFD1A8; border-radius:999px;
     padding:4px 11px; font-family:'Baloo 2';
   }
+
+  .assess-card{ border-radius:16px; padding:16px; margin-top:14px; border:1.5px solid var(--line); background:#fff; }
+  .assess-card.good{ border-color:var(--mint); background:#EBFAF8; }
+  .assess-card.warn{ border-color:var(--yellow); background:#FFF8E6; }
+  .assess-card .averdict{ font-family:'Baloo 2'; font-weight:700; font-size:15px; display:flex; align-items:center; gap:6px; }
+  .assess-card .asummary{ font-size:12.5px; color:var(--ink); line-height:1.7; margin-top:8px; }
+  .assess-card .atips{ font-size:12px; color:var(--ink-soft); line-height:1.8; margin-top:8px; padding-left:18px; }
+  .assess-badge{ font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; }
+  .assess-badge.good{ background:var(--mint); color:#fff; }
+  .assess-badge.warn{ background:var(--yellow); color:#5C4400; }
+  .assess-badge.pending{ background:var(--line); color:var(--ink-soft); }
 </style>
 </head>
 <body>
@@ -519,14 +530,20 @@ const ADMIN_PASSWORD = 'kidhealth2026';
 const GOOGLE_SHEETS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby_cnTC-BG9KclNLyNvDkFVVTEbIrK6XMX8JWBvrie1LDzC38n0fKwHQV3xKIh1VO1V/exec';
 const GOOGLE_SHEETS_VIEW_URL = 'https://docs.google.com/spreadsheets/d/1KVricI0FjeKnxRFZALhOBx6swgkhX0GKWRiAMKu0Dok/edit?usp=sharing';
 
+// Server-side relay that generates the AI weekly assessment. This MUST be a
+// backend endpoint (e.g. a Google Apps Script Web App) that holds the AI
+// API key secretly — never put an AI API key directly in this client file.
+// See ASSESSMENT_APPS_SCRIPT.md for the code to deploy.
+const ASSESSMENT_WEBAPP_URL = ''; // <-- paste your deployed Apps Script /exec URL here
+
 const defaultState = {
   profile: { lang:'th', name:'', weight:'', height:'', bmi:null },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
   weeks: [
-    { slots:{ wed:null, sat:null } },
-    { slots:{ wed:null, sat:null } },
-    { slots:{ wed:null, sat:null } },
-    { slots:{ wed:null, sat:null } },
+    { slots:{ wed:null, sat:null }, assessment:null },
+    { slots:{ wed:null, sat:null }, assessment:null },
+    { slots:{ wed:null, sat:null }, assessment:null },
+    { slots:{ wed:null, sat:null }, assessment:null },
   ],
   onboarded: false,
   playerId: null,
@@ -591,6 +608,7 @@ async function loadUserData(){
         const oldLogs = Array.isArray(w.logs) ? w.logs : [];
         w.slots = { wed: oldLogs[0] || null, sat: oldLogs[1] || null };
       }
+      if(w.assessment === undefined) w.assessment = null;
     });
   }
   if(!data.playerId) data.playerId = currentUid;
@@ -661,6 +679,7 @@ async function syncPlayerRecord(){
     quizScore: data.quiz.submitted ? data.quiz.score : null,
     weeks: data.weeks.map(w=>weekSlotCount(w)),
     weeksDetail: data.weeks.map(w=> [w.slots && w.slots.wed, w.slots && w.slots.sat].filter(Boolean)),
+    weeksAssessment: data.weeks.map(w=> w.assessment || null),
     dailyChallenge: data.dailyChallenge || null,
     dailyFood: data.dailyFood || null,
     totalDays: data.weeks.reduce((sum,w)=>sum+weekSlotCount(w),0),
@@ -751,6 +770,7 @@ function exportAdminExcel(){
     players.forEach(p=>{
       const weeks = Array.isArray(p.weeks) ? p.weeks : [];
       const weeksDetail = Array.isArray(p.weeksDetail) ? p.weeksDetail : [];
+      const weeksAssessment = Array.isArray(p.weeksAssessment) ? p.weeksAssessment : [];
 
       summaryRows.push({
         'ชื่อ-นามสกุล': p.name || '(ไม่ระบุชื่อ)',
@@ -761,6 +781,10 @@ function exportAdminExcel(){
         'สัปดาห์ 2 (ครั้ง/2)': weeks[1] || 0,
         'สัปดาห์ 3 (ครั้ง/2)': weeks[2] || 0,
         'สัปดาห์ 4 (ครั้ง/2)': weeks[3] || 0,
+        'ผลประเมินสัปดาห์ 1': weeksAssessment[0] ? weeksAssessment[0].verdict : '',
+        'ผลประเมินสัปดาห์ 2': weeksAssessment[1] ? weeksAssessment[1].verdict : '',
+        'ผลประเมินสัปดาห์ 3': weeksAssessment[2] ? weeksAssessment[2].verdict : '',
+        'ผลประเมินสัปดาห์ 4': weeksAssessment[3] ? weeksAssessment[3].verdict : '',
         'รวมครั้งทั้งหมด': p.totalDays || 0,
         'ภารกิจออกกำลังกายวันนี้': (p.dailyChallenge && p.dailyChallenge.date===today) ? p.dailyChallenge.text : '',
         'เมนูอาหารแนะนำวันนี้': (p.dailyFood && p.dailyFood.date===today) ? p.dailyFood.text : '',
@@ -1118,6 +1142,8 @@ const builders = {
       return `<div class="challenge-banner" style="text-align:center;"><div class="ctext">🗓️ เช็คอินได้เฉพาะ${requiredLabel||'วันที่กำหนด'} ก่อน 18:00 น.</div></div>`;
     })();
 
+    const assessmentHtml = finished ? renderAssessmentBlock(w) : '';
+
     return `
     <div class="topbar"><span class="screen-tag">สัปดาห์ ${ctx.activeWeek+1}</span><span class="back-link" id="backToWeeks">‹ สัปดาห์ทั้งหมด</span></div>
     <div class="screen-content">
@@ -1126,6 +1152,7 @@ const builders = {
       <div class="progress-label">${count}/2 ครั้ง (วันพุธ + วันเสาร์)</div>
       <div class="day-grid" style="grid-template-columns:repeat(2,1fr); max-width:160px; margin:14px auto;">${cells}</div>
       ${logsHtml}
+      ${assessmentHtml}
       <div style="margin-top:auto;"></div>
       ${actionHtml}
     </div>`;
@@ -1314,11 +1341,18 @@ const builders = {
     const rows = players.length ? players.map(p=>{
       const weeksStr = (p.weeks||[]).map((d,i)=>`สัปดาห์${i+1}: ${d}/2`).join(' · ');
       const updated = p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}) : '-';
+      const weeksAssessment = Array.isArray(p.weeksAssessment) ? p.weeksAssessment : [];
+      const assessBadges = weeksAssessment.map((a,i)=>{
+        if(!a) return '';
+        const cls = a.verdict==='เหมาะสม' ? 'good' : 'warn';
+        return `<span class="assess-badge ${cls}" title="${escapeHtml(a.summary||'')}">สัปดาห์${i+1}: ${escapeHtml(a.verdict||'')}</span>`;
+      }).filter(Boolean).join(' ');
       return `<div class="admin-row">
         <div class="aname">${escapeHtml(p.name || '(ไม่ระบุชื่อ)')}</div>
         <div class="ameta">ควิซ ${p.quizScore!=null ? p.quizScore+'/3' : '-'}</div>
         <div class="ameta">${weeksStr || '-'} · รวม ${p.totalDays||0} ครั้ง</div>
-        <div class="ameta" style="opacity:.7;">อัปเดตล่าสุด ${updated}</div>
+        ${assessBadges ? `<div class="ameta" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">${assessBadges}</div>` : ''}
+        <div class="ameta" style="opacity:.7; margin-top:4px;">อัปเดตล่าสุด ${updated}</div>
       </div>`;
     }).join('') : `<div style="font-size:12.5px; color:var(--ink-soft); text-align:center; margin-top:24px;">ยังไม่มีข้อมูลผู้เล่น</div>`;
     const sheetsConfigured = !!GOOGLE_SHEETS_VIEW_URL;
@@ -1329,7 +1363,7 @@ const builders = {
     <div class="topbar"><span class="screen-tag">แอดมิน</span><span class="back-link" id="adminLogout">‹ ออกจากระบบ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📊</span><div class="h2">ผู้เล่นทั้งหมด (${players.length})</div></div>
-      <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">ข้อมูลนี้แชร์ระหว่างผู้เล่นทุกคนที่ใช้แอปนี้</div>
+      <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">ข้อมูลนี้แชร์ระหว่างผู้เล่นทุกคนที่ใช้แอปนี้ — ผลประเมินสัปดาห์คำนวณอัตโนมัติ ไม่ต้องเปิดชีตดูเอง</div>
       ${sheetsBanner}
       <div style="max-height:340px; overflow-y:auto; margin-top:8px;">${rows}</div>
       <div class="status-toast" id="adminExportStatus"></div>
@@ -1341,6 +1375,125 @@ const builders = {
     </div>`;
   },
 };
+
+// ============ WEEKLY ASSESSMENT (rule-based stats + optional AI narrative) ============
+const HEALTHY_FOOD_KEYWORDS = [
+  'ผัก','ผลไม้','ปลา','ไข่ต้ม','ไข่ตุ๋น','นมจืด','ข้าวกล้อง','ต้มยำ','แกงจืด','ผัดผัก','สลัด',
+  'ต้ม','นึ่ง','อบ','ย่าง','ลวก','กล้วย','ส้ม','แอปเปิ้ล','แตงโม','มะละกอ','ฝรั่ง','ชมพู่','โยเกิร์ต',
+  'อกไก่','เต้าหู้','ข้าวโพดต้ม','น้ำเปล่า',
+];
+const UNHEALTHY_FOOD_KEYWORDS = [
+  'ทอด','หวาน','น้ำอัดลม','ขนม','ไอศกรีม','เค้ก','โดนัท','พิซซ่า','กรอบ','มัน','ของมัน','น้ำหวาน',
+  'ลูกอม','ช็อกโกแลต','ไส้กรอก','เบคอน','กุนเชียง','มาม่า','ปาท่องโก๋','คุกกี้','เยลลี่','พุดดิ้ง',
+  'แฮมเบอร์เกอร์','ฮอทดอก','เฟรนช์ฟรายส์',
+];
+
+function classifyFoodText(text){
+  const t = (text||'').toLowerCase();
+  let healthy = 0, unhealthy = 0;
+  HEALTHY_FOOD_KEYWORDS.forEach(k=>{ if(t.includes(k)) healthy++; });
+  UNHEALTHY_FOOD_KEYWORDS.forEach(k=>{ if(t.includes(k)) unhealthy++; });
+  return { healthy, unhealthy };
+}
+
+// Pulls out plain numeric stats from one week's two check-ins — used both
+// as the deterministic fallback verdict and as the data sent to the AI.
+function computeWeekStats(w){
+  const slots = ['wed','sat'].map(s=> w.slots && w.slots[s]).filter(Boolean);
+  let mealsEaten = 0, mealsSkipped = 0, healthyHits = 0, unhealthyHits = 0, exerciseDays = 0, exerciseMinutes = 0;
+  const mealLines = [];
+  slots.forEach(log=>{
+    (log.meals||[]).forEach(m=>{
+      if(m.eaten){
+        mealsEaten++;
+        const text = [m.food||'', ...(m.tags||[])].join(' ');
+        const { healthy, unhealthy } = classifyFoodText(text);
+        healthyHits += healthy; unhealthyHits += unhealthy;
+        mealLines.push(`${log.dayLabel||''} ${m.name}: ${text.trim()||'ไม่ระบุเมนู'}`);
+      }else{
+        mealsSkipped++;
+        mealLines.push(`${log.dayLabel||''} ${m.name}: ไม่ได้ทาน`);
+      }
+    });
+    if(log.exercise && log.exercise.done){
+      exerciseDays++;
+      exerciseMinutes += parseInt(log.exercise.duration)||0;
+    }
+  });
+  return { mealsEaten, mealsSkipped, healthyHits, unhealthyHits, exerciseDays, exerciseMinutes, mealLines, checkinCount: slots.length };
+}
+
+// Deterministic fallback verdict — used immediately, and used as-is if no
+// AI endpoint is configured or the AI call fails, so admins always get a
+// result without waiting on anything external.
+function ruleBasedVerdict(stats){
+  const goodFood = stats.healthyHits >= stats.unhealthyHits;
+  const goodExercise = stats.exerciseDays >= 1;
+  const lowSkip = stats.mealsSkipped <= stats.mealsEaten;
+  const isGood = goodFood && goodExercise && lowSkip;
+  return {
+    verdict: isGood ? 'เหมาะสม' : 'ควรปรับปรุง',
+    summary: isGood
+      ? `สัปดาห์นี้ทานอาหารมีประโยชน์เป็นส่วนใหญ่ (${stats.healthyHits} รายการ เทียบกับของที่ควรลด ${stats.unhealthyHits} รายการ) และออกกำลังกาย ${stats.exerciseDays} วัน ถือว่าอยู่ในเกณฑ์ที่ดีนะ`
+      : `สัปดาห์นี้พบของที่ควรลด ${stats.unhealthyHits} รายการ เทียบกับของมีประโยชน์ ${stats.healthyHits} รายการ และออกกำลังกาย ${stats.exerciseDays} วัน ลองปรับเพิ่มผัก/ผลไม้และออกกำลังกายให้มากขึ้นอีกนิดนะ`,
+    tips: isGood
+      ? ['รักษาพฤติกรรมดีแบบนี้ต่อไปในสัปดาห์หน้านะ']
+      : ['ลองเพิ่มผัก ผลไม้ และโปรตีนไขมันต่ำในแต่ละมื้อ', 'ออกกำลังกายอย่างน้อย 20-30 นาที ทั้งวันพุธและวันเสาร์'],
+    source: 'rule',
+  };
+}
+
+function renderAssessmentBlock(w){
+  const a = w.assessment;
+  if(!a){
+    return `<div class="assess-card"><div class="averdict">⏳ กำลังประมวลผล...</div><div class="asummary">ระบบกำลังสรุปผลพฤติกรรมของสัปดาห์นี้ให้อัตโนมัติ รอสักครู่นะ</div></div>`;
+  }
+  const isGood = a.verdict === 'เหมาะสม';
+  return `<div class="assess-card ${isGood?'good':'warn'}">
+    <div class="averdict">${isGood?'✅':'💡'} ผลประเมินสัปดาห์นี้: ${escapeHtml(a.verdict)}</div>
+    <div class="asummary">${escapeHtml(a.summary||'')}</div>
+    ${a.tips && a.tips.length ? `<ul class="atips">${a.tips.map(t=>`<li>${escapeHtml(t)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+}
+
+// Called automatically once a week's two check-ins are both in. Tries the
+// AI relay first (if configured); always falls back to the rule-based
+// verdict so there's never a broken/missing result.
+async function ensureWeekAssessment(weekIndex){
+  const w = data.weeks[weekIndex];
+  if(!w || weekSlotCount(w) < 2 || w.assessment) return;
+
+  const stats = computeWeekStats(w);
+  let result = ruleBasedVerdict(stats);
+
+  if(ASSESSMENT_WEBAPP_URL){
+    try{
+      const resp = await fetch(ASSESSMENT_WEBAPP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          childName: data.profile.name,
+          bmi: data.profile.bmi,
+          weekIndex: weekIndex + 1,
+          stats,
+          ruleVerdict: result.verdict,
+        }),
+      });
+      if(resp.ok){
+        const json = await resp.json();
+        if(json && json.verdict && json.summary){
+          result = { verdict: json.verdict, summary: json.summary, tips: json.tips || [], source: 'ai' };
+        }
+      }
+    }catch(e){
+      console.error('AI assessment failed, using rule-based result', e);
+    }
+  }
+
+  w.assessment = result;
+  await saveData();
+  if(screenState==='weekDetail' && ctx.activeWeek===weekIndex) render();
+}
 
 // ============ INTERACTIONS ============
 function bindInteractions(s){
@@ -1471,6 +1624,7 @@ function bindInteractions(s){
     if(finished){
       const backBtn2 = document.getElementById('backToWeeks2');
       if(backBtn2) backBtn2.addEventListener('click', ()=>{ screenState='weeks'; render(); });
+      ensureWeekAssessment(ctx.activeWeek);
     }else{
       const checkinBtn = document.getElementById('toCheckin');
       if(checkinBtn) checkinBtn.addEventListener('click', ()=>{
@@ -1823,6 +1977,9 @@ function finishDay(){
   screenState='dayDone';
   render();
   burstConfetti();
+  if(weekSlotCount(w) >= 2){
+    ensureWeekAssessment(ctx.activeWeek);
+  }
 }
 
 document.getElementById('adminEntry').addEventListener('click', ()=>{
