@@ -678,7 +678,15 @@ async function syncPlayerRecord(){
     height: data.profile.height || '',
     quizScore: data.quiz.submitted ? data.quiz.score : null,
     weeks: data.weeks.map(w=>weekSlotCount(w)),
-    weeksDetail: data.weeks.map(w=> [w.slots && w.slots.wed, w.slots && w.slots.sat].filter(Boolean)),
+    // Firestore rejects an array whose elements are themselves arrays
+    // ("nested arrays are not supported") and fails the ENTIRE document
+    // write when it hits this — which was silently breaking every field
+    // in this record, not just this one. A map keyed by week number is
+    // allowed (arrays can live inside a map, just not inside another array).
+    weeksDetail: data.weeks.reduce((acc, w, i) => {
+      acc['week' + (i + 1)] = [w.slots && w.slots.wed, w.slots && w.slots.sat].filter(Boolean);
+      return acc;
+    }, {}),
     weeksAssessment: data.weeks.map(w=> w.assessment || null),
     dailyChallenge: data.dailyChallenge || null,
     dailyFood: data.dailyFood || null,
@@ -769,7 +777,10 @@ function exportAdminExcel(){
 
     players.forEach(p=>{
       const weeks = Array.isArray(p.weeks) ? p.weeks : [];
-      const weeksDetail = Array.isArray(p.weeksDetail) ? p.weeksDetail : [];
+      // weeksDetail is stored as a map ({week1: [...], week2: [...], ...})
+      // rather than an array-of-arrays, since Firestore can't store nested
+      // arrays. Fall back to [] per week if a doc predates this format.
+      const weeksDetailObj = (p.weeksDetail && typeof p.weeksDetail === 'object' && !Array.isArray(p.weeksDetail)) ? p.weeksDetail : {};
       const weeksAssessment = Array.isArray(p.weeksAssessment) ? p.weeksAssessment : [];
 
       summaryRows.push({
@@ -791,7 +802,8 @@ function exportAdminExcel(){
         'อัปเดตล่าสุด': p.updatedAt ? new Date(p.updatedAt).toLocaleString('th-TH') : '',
       });
 
-      weeksDetail.forEach((logs, wi)=>{
+      for(let wi=0; wi<4; wi++){
+        const logs = weeksDetailObj['week' + (wi+1)] || [];
         (logs||[]).forEach(log=>{
           const mealsArr = Array.isArray(log.meals)
             ? log.meals
@@ -817,7 +829,7 @@ function exportAdminExcel(){
             'รางวัลที่ได้รับ': log.reward || '',
           });
         });
-      });
+      }
     });
 
     const wb = XLSX.utils.book_new();
