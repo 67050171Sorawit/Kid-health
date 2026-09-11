@@ -1248,33 +1248,46 @@ const builders = {
     </div>`;
   },
 
-  knowledge: () => `
+  knowledge: () => {
+    const stats = computeOverallStats();
+    const v = overallVerdict(stats);
+    const isGood = v.verdict === 'เหมาะสม';
+    const bmiInfo = getBmiInfo(data.profile.bmi);
+    return `
     <div class="screen-content" style="align-items:center;">
-      <div class="mascot">🥗</div>
-      <div class="h2" style="text-align:center; margin-bottom:10px;">${bounceText('อย่าหนีกันนะน้องๆ')}</div>
-      <div class="quiz-card" style="width:100%;">
-        <div style="font-size:13px; line-height:1.9; color:var(--ink);">
-          อยากมีสุขภาพที่ดีมาฟังตรงนี้นะ 💚<br/>
-          น้องๆ รู้ไหมว่าเราควรได้รับประทานอาหารหมู่ต่าง ๆ ใน 1 วันดังนี้:
+      <div class="mascot">${isGood ? '🌟' : '🥗'}</div>
+      <div class="h2" style="text-align:center; margin-bottom:10px;">${bounceText('สรุปผลภาพรวมของหนู')}</div>
+
+      ${bmiInfo ? `
+        <div style="width:100%; background:${bmiInfo.color}; border-radius:14px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <span style="font-family:'Baloo 2'; font-weight:700; font-size:13px; color:${bmiInfo.textColor};">BMI ${data.profile.bmi.toFixed(1)}</span>
+          <span style="font-size:11.5px; color:${bmiInfo.textColor};">${escapeHtml(bmiInfo.label)}</span>
+        </div>` : ''}
+
+      <div class="assess-card ${isGood?'good':'warn'}" style="width:100%; margin-top:0;">
+        <div class="averdict">${isGood?'✅':'💡'} ภาพรวม: ${escapeHtml(v.verdict)}</div>
+        <div class="asummary">${escapeHtml(v.summary)}</div>
+      </div>
+
+      <div class="week-list" style="width:100%; margin-top:12px;">
+        <div class="week-item" style="cursor:default;">
+          <div class="wname" style="font-size:12.5px;">🍽️ อาหารมีประโยชน์ / ควรลด</div>
+          <div style="font-family:'Baloo 2'; font-weight:700; font-size:14px;">${stats.healthyHits} / ${stats.unhealthyHits}</div>
         </div>
-        <ul style="font-size:12.5px; line-height:1.9; color:var(--ink-soft); padding-left:18px; margin:10px 0;">
-          <li>นมจืด 1-2 แก้ว ลดการรับประทานนมสดไขมันเต็ม</li>
-          <li>ไข่ 1 ฟอง ข้าวครบ 3 มื้อ ครบ 5 หมู่ รับประทานอาหารเป็นเวลา</li>
-          <li>เนื้อสัตว์สุกที่มีไขมันต่ำหรือไม่ติดไขมัน เช่น ปลา หมู อกไก่</li>
-          <li>ผักใบเขียวและผลไม้รสไม่หวานจัด เช่น กล้วย ส้ม แอปเปิ้ล</li>
-        </ul>
-        <div style="font-size:13px; font-weight:600; color:var(--red); margin-top:4px;">สิ่งที่น้องๆ ควรหลีกเลี่ยง:</div>
-        <div style="font-size:12.5px; line-height:1.9; color:var(--ink-soft); margin-top:4px;">
-          น้ำหวาน น้ำอัดลม ขนมหวาน ของหวาน ของทอด ของมัน<br/>
-          รวมถึงอาหารไขมันสูง เช่น ไส้กรอก แฮม เบคอน กุนเชียง
+        <div class="week-item" style="cursor:default;">
+          <div class="wname" style="font-size:12.5px;">🏃 วันที่ออกกำลังกาย</div>
+          <div style="font-family:'Baloo 2'; font-weight:700; font-size:14px;">${stats.exerciseDays} วัน</div>
         </div>
-        <div style="font-size:13px; line-height:1.8; color:var(--ink); margin-top:10px; text-align:center;">
-          แล้วเรามามีสุขภาพที่ดีไปด้วยกันนะคะ อย่าลืมออกกำลังกายนะ 💪
+        <div class="week-item" style="cursor:default;">
+          <div class="wname" style="font-size:12.5px;">📅 เช็คอินแล้ว</div>
+          <div style="font-family:'Baloo 2'; font-weight:700; font-size:14px;">${stats.checkinsDone}/${stats.totalPossible} ครั้ง</div>
         </div>
       </div>
+
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="toRewardWheelFromKnowledge">🎁 ไปหมุนของรางวัลกันเลย</button>
-    </div>`,
+    </div>`;
+  },
 
   wheel: () => {
     const w = ctx.wheel;
@@ -1454,6 +1467,41 @@ function ruleBasedVerdict(stats){
     source: 'rule',
   };
 }
+
+// Aggregates stats across ALL weeks logged so far (not just one week) —
+// used by the daily "ภาพรวม" summary screen so the numbers keep growing
+// as the child logs more days across the whole 4-week program.
+function computeOverallStats(){
+  let mealsEaten=0, mealsSkipped=0, healthyHits=0, unhealthyHits=0, exerciseDays=0, exerciseMinutes=0, checkinsDone=0;
+  data.weeks.forEach(w=>{
+    const s = computeWeekStats(w);
+    mealsEaten += s.mealsEaten;
+    mealsSkipped += s.mealsSkipped;
+    healthyHits += s.healthyHits;
+    unhealthyHits += s.unhealthyHits;
+    exerciseDays += s.exerciseDays;
+    exerciseMinutes += s.exerciseMinutes;
+    checkinsDone += s.checkinCount;
+  });
+  return { mealsEaten, mealsSkipped, healthyHits, unhealthyHits, exerciseDays, exerciseMinutes, checkinsDone, totalPossible: data.weeks.length*2 };
+}
+
+// Same good/needs-improvement logic as the per-week verdict, just worded
+// for "so far, overall" rather than "this week".
+function overallVerdict(stats){
+  const goodFood = stats.healthyHits >= stats.unhealthyHits;
+  const goodExercise = stats.exerciseDays >= Math.max(1, Math.round(stats.checkinsDone/2));
+  const lowSkip = stats.mealsSkipped <= stats.mealsEaten;
+  const isGood = goodFood && goodExercise && lowSkip;
+  return {
+    verdict: isGood ? 'เหมาะสม' : 'ควรปรับปรุง',
+    summary: isGood
+      ? `ภาพรวมตั้งแต่เริ่มโปรแกรม หนูทานอาหารมีประโยชน์เป็นส่วนใหญ่และออกกำลังกายสม่ำเสมอ ถือว่าอยู่ในเกณฑ์ที่ดีเลยนะ`
+      : `ภาพรวมตั้งแต่เริ่มโปรแกรม ยังพบของที่ควรลดอยู่พอสมควร ลองปรับเพิ่มผัก/ผลไม้และออกกำลังกายให้สม่ำเสมอขึ้นอีกนิดนะ`,
+  };
+}
+
+
 
 function renderAssessmentBlock(w){
   const a = w.assessment;
