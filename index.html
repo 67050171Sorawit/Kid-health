@@ -294,25 +294,65 @@ function calcBMI(weightKg, heightCm){
   return w / (h*h);
 }
 
-
-const bmiCategories = [
-  { key:'lightGreen', label:'เขียวอ่อน (รักษาสุขภาพ)', range:'23 - 24.9', color:'#8FD9A8', textColor:'#14302F',
-    advice:'น้ำหนักของหนูอยู่ในเกณฑ์ที่ควรรักษาสุขภาพให้ดีต่อไปนะ ทานอาหารมีประโยชน์ให้ครบ 5 หมู่ และออกกำลังกายสม่ำเสมอ' },
-  { key:'darkGreen', label:'เขียวเข้ม (เริ่มควบคุมน้ำหนัก)', range:'25 - 30', color:'#3FA34D', textColor:'#FFFFFF',
-    advice:'น้ำหนักของหนูอยู่ในเกณฑ์ที่ควรเริ่มควบคุมน้ำหนักนะ ลองเพิ่มการออกกำลังกาย ลดของหวานและของทอด แล้วสุขภาพจะดีขึ้นได้' },
-];
-
-function getBmiInfo(bmi){
-  if(bmi==null) return null;
-  if(bmi < 25) return bmiCategories[0]; // ต่ำกว่า 25 (รวมต่ำกว่า 23) → เขียวอ่อน
-  return bmiCategories[1];              // 25 ขึ้นไป (รวมสูงกว่า 30) → เขียวเข้ม
+function calcAge(birthDateObj){
+  if(!birthDateObj || isNaN(birthDateObj.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birthDateObj.getFullYear();
+  const m = today.getMonth() - birthDateObj.getMonth();
+  if(m < 0 || (m===0 && today.getDate() < birthDateObj.getDate())) age--;
+  return age;
 }
 
-// Weight range (kg) that would put this height in the "ปกติ" (normal) band
-function idealWeightRange(heightCm){
+// เกณฑ์ BMI เฉพาะเด็ก แยกตามอายุ (ปี) และเพศ ตามตารางที่ให้มา
+// ครอบคลุมอายุ 9-12 ปี — อายุนอกช่วงนี้จะปัดเข้าขอบใกล้ที่สุด (9 หรือ 12)
+const CHILD_BMI_TABLE = {
+  9:  { male:{ overweight:[19.3,20.5], obese:[20.6,24.3] }, female:{ overweight:[20.0,21.5], obese:[21.6,26.5] } },
+  10: { male:{ overweight:[20.0,21.4], obese:[21.5,26.1] }, female:{ overweight:[20.9,22.6], obese:[22.7,28.4] } },
+  11: { male:{ overweight:[21.0,22.5], obese:[22.6,28.0] }, female:{ overweight:[21.9,23.7], obese:[23.8,30.2] } },
+  12: { male:{ overweight:[21.9,23.6], obese:[23.7,30.0] }, female:{ overweight:[23.0,25.0], obese:[25.1,31.9] } },
+};
+
+function getChildBmiThresholds(age, gender){
+  if(!gender) return null;
+  const clampedAge = Math.min(12, Math.max(9, age==null ? 9 : age));
+  const table = CHILD_BMI_TABLE[clampedAge];
+  return table ? table[gender] : null;
+}
+
+// bmi, age(years), gender('male'|'female') -> 'lightGreen' (ท้วม) | 'darkGreen' (เริ่มอ้วนขึ้นไป) | null (ปกติ/ต่ำกว่าเกณฑ์)
+function classifyChildBmi(bmi, age, gender){
+  if(bmi==null) return null;
+  const t = getChildBmiThresholds(age, gender);
+  if(!t) return null;
+  if(bmi < t.overweight[0]) return null;
+  if(bmi <= t.overweight[1]) return 'lightGreen';
+  return 'darkGreen';
+}
+
+const bmiCategories = [
+  { key:'lightGreen', label:'เขียวอ่อน (ท้วม)', color:'#8FD9A8', textColor:'#14302F',
+    advice:'น้ำหนักของหนูอยู่ในเกณฑ์ท้วมนะ ลองทานอาหารมีประโยชน์ให้ครบ 5 หมู่ และออกกำลังกายสม่ำเสมอ จะช่วยให้สุขภาพดีขึ้นได้' },
+  { key:'darkGreen', label:'เขียวเข้ม (เริ่มอ้วน)', color:'#3FA34D', textColor:'#FFFFFF',
+    advice:'น้ำหนักของหนูอยู่ในเกณฑ์เริ่มอ้วนนะ ลองเพิ่มการออกกำลังกาย ลดของหวานและของทอด แล้วสุขภาพจะดีขึ้นได้' },
+];
+const bmiNormalInfo = { key:'normal', label:'น้ำหนักอยู่ในเกณฑ์ปกติ', color:'#B7E8C4', textColor:'#14302F',
+  advice:'เยี่ยมเลย! น้ำหนักของหนูอยู่ในเกณฑ์ปกตินะ รักษาสุขภาพแบบนี้ต่อไป ทานอาหารมีประโยชน์และออกกำลังกายสม่ำเสมอนะ' };
+
+// bmi + age + gender -> the category info object to display (or the "normal" one)
+function getBmiInfo(bmi, age, gender){
+  if(bmi==null) return null;
+  const key = classifyChildBmi(bmi, age, gender);
+  if(key==='lightGreen') return bmiCategories[0];
+  if(key==='darkGreen') return bmiCategories[1];
+  return bmiNormalInfo;
+}
+
+// น้ำหนัก (กก.) สูงสุดที่ยังอยู่ในเกณฑ์ปกติ สำหรับส่วนสูง/อายุ/เพศนี้
+function idealWeightMax(age, gender, heightCm){
+  const t = getChildBmiThresholds(age, gender);
   const h = parseFloat(heightCm) / 100;
-  if(!h || h<=0) return null;
-  return { min: (18.5*h*h).toFixed(1), max: (24.9*h*h).toFixed(1) };
+  if(!t || !h || h<=0) return null;
+  return (t.overweight[0] * h * h).toFixed(1);
 }
 
 // ============ FUN STUFF: confetti, bounce text, mascot, streaks, sound ============
@@ -537,7 +577,7 @@ const GOOGLE_SHEETS_VIEW_URL = 'https://docs.google.com/spreadsheets/d/1KVricI0F
 const ASSESSMENT_WEBAPP_URL = ''; // <-- paste your deployed Apps Script /exec URL here
 
 const defaultState = {
-  profile: { lang:'th', name:'', weight:'', height:'', bmi:null },
+  profile: { lang:'th', name:'', birthDay:'', birthMonth:'', birthYearBE:'', age:null, gender:'', weight:'', height:'', bmi:null },
   quiz: { answers:[null,null,null], submitted:false, score:0 },
   weeks: [
     { slots:{ wed:null, sat:null }, assessment:null },
@@ -578,7 +618,11 @@ auth.onAuthStateChanged(async (user) => {
     currentUid = user.uid;
     currentUsername = (user.email || '').split('@')[0];
     await loadUserData();
-    screenState = data.onboarded ? 'weeks' : 'lang';
+    // Existing accounts created before birthdate/gender existed need to fill
+    // that in once before the BMI category can be computed correctly — but
+    // we don't make them redo the whole quiz/onboarding, just this one step.
+    const needsBirthInfo = data.onboarded && (!data.profile.gender || data.profile.age==null);
+    screenState = !data.onboarded ? 'lang' : (needsBirthInfo ? 'birthdate' : 'weeks');
   }else{
     currentUid = null;
     currentUsername = '';
@@ -614,6 +658,12 @@ async function loadUserData(){
   if(!data.playerId) data.playerId = currentUid;
   if(data.dailyFood === undefined) data.dailyFood = null;
   if(!data.streak) data.streak = { lastDate:null };
+  // Migrate profiles saved before birthdate/gender were added
+  if(data.profile.birthDay === undefined) data.profile.birthDay = '';
+  if(data.profile.birthMonth === undefined) data.profile.birthMonth = '';
+  if(data.profile.birthYearBE === undefined) data.profile.birthYearBE = '';
+  if(data.profile.age === undefined) data.profile.age = null;
+  if(data.profile.gender === undefined) data.profile.gender = '';
 }
 
 async function saveData(){
@@ -674,6 +724,8 @@ async function syncPlayerRecord(){
     id: currentUid,
     username: currentUsername,
     name: data.profile.name || '',
+    age: data.profile.age,
+    gender: data.profile.gender || '',
     weight: data.profile.weight || '',
     height: data.profile.height || '',
     quizScore: data.quiz.submitted ? data.quiz.score : null,
@@ -925,14 +977,52 @@ const builders = {
       <input class="field" id="nameInput" placeholder="เช่น น้องพลอย ใจดี" value="${escapeHtml(data.profile.name)}" />
       <div class="error-msg" id="nameErr"></div>
       <div style="margin-top:auto;"></div>
-      <button class="big-btn" id="toBody">ยืนยัน</button>
+      <button class="big-btn" id="toBirthdate">ยืนยัน</button>
     </div>`,
 
+  birthdate: () => {
+    const thaiMonths = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const monthOptions = thaiMonths.map((m,i)=> `<option value="${i+1}" ${String(data.profile.birthMonth)===String(i+1)?'selected':''}>${m}</option>`).join('');
+    const backTarget = data.onboarded ? '' : `<span class="back-link" id="backBtn">‹ ย้อนกลับ</span>`;
+    return `
+    <div class="topbar"><span class="screen-tag">3 · วันเกิด</span>${backTarget}</div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">🎂</span><div class="h2">วันเกิดของหนู</div></div>
+      <div style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">ใช้คำนวณอายุ เพื่อดูเกณฑ์ BMI ที่เหมาะกับหนูโดยเฉพาะ</div>
+      <div class="row2" style="margin-top:14px; gap:8px;">
+        <div style="flex:0.8;">
+          <div class="field-label">วัน</div>
+          <input class="field" id="birthDayInput" type="number" placeholder="วว" min="1" max="31" value="${escapeHtml(data.profile.birthDay)}" />
+        </div>
+        <div style="flex:1.4;">
+          <div class="field-label">เดือน</div>
+          <select class="field" id="birthMonthInput">
+            <option value="">เลือกเดือน</option>
+            ${monthOptions}
+          </select>
+        </div>
+        <div style="flex:1;">
+          <div class="field-label">ปี (พ.ศ.)</div>
+          <input class="field" id="birthYearInput" type="number" placeholder="เช่น 2559" value="${escapeHtml(data.profile.birthYearBE)}" />
+        </div>
+      </div>
+      <div class="field-label" style="margin-top:16px;">เพศ</div>
+      <div class="lang-row">
+        <div class="lang-btn ${data.profile.gender==='male'?'active':''}" data-gender="male">ชาย</div>
+        <div class="lang-btn ${data.profile.gender==='female'?'active':''}" data-gender="female">หญิง</div>
+      </div>
+      <div class="error-msg" id="birthdateErr"></div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toBodyFromBirthdate">ยืนยัน</button>
+    </div>`;
+  },
+
   body: () => `
-    <div class="topbar"><span class="screen-tag">3 · นน./สส.</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="topbar"><span class="screen-tag">4 · นน./สส.</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📏</span><div class="h2">น้ำหนัก / ส่วนสูง</div></div>
       <div style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">กรอกให้ครบ แล้วเราจะคำนวณค่า BMI ให้หนูดูด้วยนะ</div>
+      ${data.profile.age!=null ? `<div style="font-size:11px; color:var(--ink-soft); margin-top:8px;">อายุของหนู: <b>${data.profile.age} ปี</b> · เพศ: <b>${data.profile.gender==='male'?'ชาย':'หญิง'}</b></div>` : ''}
       <div class="row2" style="margin-top:14px;">
         <div>
           <div class="field-label">น้ำหนัก (กก.)</div>
@@ -950,42 +1040,48 @@ const builders = {
 
   bmiResult: () => {
     const bmi = data.profile.bmi;
-    const info = getBmiInfo(bmi);
-    const ideal = idealWeightRange(data.profile.height);
+    const age = data.profile.age;
+    const gender = data.profile.gender;
+    const info = getBmiInfo(bmi, age, gender);
+    const idealMax = idealWeightMax(age, gender, data.profile.height);
     if(!info) return `<div class="screen-content"><div class="h2">ไม่พบข้อมูล</div></div>`;
-    const needsBorder = info.key==='normal';
-    const swatchesHtml = bmiCategories.map(c=>{
-      const isCurrent = c.key===info.key;
+    const t = getChildBmiThresholds(age, gender);
+    const swatchRow = (key, label, range, color, textColor)=>{
+      const isCurrent = info.key===key;
       return `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; ${isCurrent ? 'background:#F0EAD9;' : ''}">
-        <div style="width:16px; height:16px; border-radius:5px; background:${c.color}; ${c.key==='normal'?'border:1.5px solid var(--line);':''} flex-shrink:0;"></div>
-        <div style="font-size:11px; color:var(--ink-soft); flex:1;">${c.label} (${c.range})</div>
+        <div style="width:16px; height:16px; border-radius:5px; background:${color}; flex-shrink:0;"></div>
+        <div style="font-size:11px; color:var(--ink-soft); flex:1;">${label} (${range})</div>
         ${isCurrent ? '<span style="font-size:13px;">👈 หนูอยู่ตรงนี้</span>' : ''}
       </div>`;
-    }).join('');
-    const idealHtml = (ideal && info.key!=='normal')
-      ? `<div style="font-size:12px; color:var(--ink-soft); margin-top:10px; text-align:center;">สำหรับส่วนสูงของหนู น้ำหนักที่อยู่ในเกณฑ์ปกติคือประมาณ <b>${ideal.min} - ${ideal.max} กก.</b></div>`
+    };
+    const swatchesHtml = t
+      ? swatchRow('lightGreen','เขียวอ่อน (ท้วม)', `${t.overweight[0]} - ${t.overweight[1]}`, '#8FD9A8')
+        + swatchRow('darkGreen','เขียวเข้ม (เริ่มอ้วน)', `${t.obese[0]} ขึ้นไป`, '#3FA34D')
+      : '';
+    const idealHtml = (idealMax && info.key!=='normal')
+      ? `<div style="font-size:12px; color:var(--ink-soft); margin-top:10px; text-align:center;">สำหรับส่วนสูงและอายุของหนู น้ำหนักที่อยู่ในเกณฑ์ปกติคือไม่เกินประมาณ <b>${idealMax} กก.</b></div>`
       : '';
     return `
     <div class="screen-content" style="align-items:center;">
       <div class="topbar" style="position:static; margin-bottom:6px;"><span class="screen-tag">ผล BMI</span></div>
       <div class="title-row"><span class="icon">⚖️</span><div class="h2">ค่า BMI ของหนู</div></div>
-      <div style="width:100%; background:${info.color}; ${needsBorder?'border:2px solid var(--line);':''} border-radius:16px; padding:18px; text-align:center; margin-top:10px;">
+      <div style="width:100%; background:${info.color}; ${info.key==='normal'?'border:2px solid var(--line);':''} border-radius:16px; padding:18px; text-align:center; margin-top:10px;">
         <div style="font-family:'Baloo 2'; font-weight:800; font-size:38px; color:${info.textColor};">${bmi.toFixed(1)}</div>
         <div style="font-family:'Baloo 2'; font-weight:700; font-size:15px; color:${info.textColor}; margin-top:2px;">${info.label}</div>
-        <div style="font-size:11px; color:${info.textColor}; opacity:.85; margin-top:2px;">เกณฑ์ BMI: ${info.range}</div>
+        <div style="font-size:11px; color:${info.textColor}; opacity:.85; margin-top:2px;">อายุ ${age} ปี · ${gender==='male'?'ชาย':'หญิง'}</div>
       </div>
       <div style="font-size:12.5px; color:var(--ink-soft); text-align:center; line-height:1.7; margin-top:14px;">${info.advice}</div>
       ${mascotBubble(info.key==='normal' ? 'bmiNormal' : 'bmiCare')}
       ${idealHtml}
-      <div class="field-label" style="margin-top:16px; align-self:flex-start;">เทียบกับเกณฑ์ทั้งหมด</div>
-      <div style="width:100%; display:flex; flex-direction:column; gap:2px;">${swatchesHtml}</div>
+      ${t ? `<div class="field-label" style="margin-top:16px; align-self:flex-start;">เทียบกับเกณฑ์ของอายุ ${age} ปี (${gender==='male'?'ชาย':'หญิง'})</div>
+      <div style="width:100%; display:flex; flex-direction:column; gap:2px;">${swatchesHtml}</div>` : ''}
       <div style="margin-top:auto;"></div>
       <button class="big-btn" id="toQuizFromBmi" style="margin-top:16px;">ไปทำแบบทดสอบความรู้ต่อ</button>
     </div>`;
   },
 
   quiz: () => `
-    <div class="topbar"><span class="screen-tag">4 · ความรู้</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="topbar"><span class="screen-tag">5 · ความรู้</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">🥗</span><div class="h2">ความรู้เรื่องอาหาร</div></div>
       ${quizQuestions.map((qq,i)=>`
@@ -1252,7 +1348,7 @@ const builders = {
     const stats = computeOverallStats();
     const v = overallVerdict(stats);
     const isGood = v.verdict === 'เหมาะสม';
-    const bmiInfo = getBmiInfo(data.profile.bmi);
+    const bmiInfo = getBmiInfo(data.profile.bmi, data.profile.age, data.profile.gender);
     return `
     <div class="screen-content" style="align-items:center;">
       <div class="mascot">${isGood ? '🌟' : '🥗'}</div>
@@ -1602,16 +1698,67 @@ function bindInteractions(s){
 
   if(s==='name'){
     document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='lang'; render(); });
-    document.getElementById('toBody').addEventListener('click', ()=>{
+    document.getElementById('toBirthdate').addEventListener('click', ()=>{
       const val = document.getElementById('nameInput').value.trim();
       if(!val){ document.getElementById('nameErr').textContent = 'กรุณากรอกชื่อก่อนนะ'; return; }
       data.profile.name = val;
-      screenState='body'; render();
+      screenState='birthdate'; render();
+    });
+  }
+
+  if(s==='birthdate'){
+    const backBtn = document.getElementById('backBtn');
+    if(backBtn) backBtn.addEventListener('click', ()=>{ screenState='name'; render(); });
+    screenEl.querySelectorAll('[data-gender]').forEach(b=> b.addEventListener('click', ()=>{
+      data.profile.gender = b.dataset.gender;
+      render();
+    }));
+    document.getElementById('toBodyFromBirthdate').addEventListener('click', ()=>{
+      const errEl = document.getElementById('birthdateErr');
+      const day = parseInt(document.getElementById('birthDayInput').value);
+      const month = parseInt(document.getElementById('birthMonthInput').value);
+      const yearBE = parseInt(document.getElementById('birthYearInput').value);
+      const gender = data.profile.gender;
+
+      if(!day || day<1 || day>31 || !month || !yearBE || yearBE<2400 || yearBE>2600){
+        errEl.textContent = 'กรอกวัน/เดือน/ปีเกิด (พ.ศ.) ให้ครบและถูกต้องก่อนนะ';
+        return;
+      }
+      if(!gender){
+        errEl.textContent = 'เลือกเพศก่อนนะ';
+        return;
+      }
+      const yearAD = yearBE - 543;
+      const birthDate = new Date(yearAD, month-1, day);
+      if(birthDate.getMonth() !== month-1 || birthDate.getDate() !== day){
+        errEl.textContent = 'วันที่เกิดไม่ถูกต้อง ลองเช็คอีกครั้งนะ';
+        return;
+      }
+      const age = calcAge(birthDate);
+      if(age==null || age<0 || age>25){
+        errEl.textContent = 'วันเกิดดูไม่ถูกต้อง ลองเช็คอีกครั้งนะ';
+        return;
+      }
+      errEl.textContent = '';
+      data.profile.birthDay = day;
+      data.profile.birthMonth = month;
+      data.profile.birthYearBE = yearBE;
+      data.profile.age = age;
+      // Existing (already-onboarded) accounts only need this one field filled
+      // in retroactively — send them straight back into the program instead
+      // of re-running body/quiz and losing nothing they'd already done.
+      if(data.onboarded){
+        saveData();
+        screenState='weeks';
+      }else{
+        screenState='body';
+      }
+      render();
     });
   }
 
   if(s==='body'){
-    document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='name'; render(); });
+    document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='birthdate'; render(); });
     document.getElementById('toQuiz').addEventListener('click', ()=>{
       const wv = document.getElementById('weightInput').value;
       const hv = document.getElementById('heightInput').value;
@@ -1902,11 +2049,7 @@ const bmiWheelData = {
 
 // Returns 'lightGreen' | 'darkGreen' | null depending on the child's BMI.
 function getBmiWheelGroup(){
-  const bmi = data.profile.bmi;
-  if(bmi==null) return null;
-  if(bmi>=23 && bmi<=24.59) return 'lightGreen';
-  if(bmi>=25 && bmi<=30) return 'darkGreen';
-  return null;
+  return classifyChildBmi(data.profile.bmi, data.profile.age, data.profile.gender);
 }
 
 // Decides which day's wheel data to use: 'wed' or 'sat'.
