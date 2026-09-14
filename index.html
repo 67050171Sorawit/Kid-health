@@ -1017,8 +1017,44 @@ const builders = {
     </div>`;
   },
 
+  bmiReference: () => {
+    const age = data.profile.age;
+    const gender = data.profile.gender;
+    const myT = getChildBmiThresholds(age, gender);
+    const genderLabel = { male:'ชาย', female:'หญิง' };
+    const ageRows = [9,10,11,12].map(a=>{
+      const row = CHILD_BMI_TABLE[a];
+      return `<div style="margin-top:10px;">
+        <div style="font-family:'Baloo 2'; font-weight:700; font-size:12.5px; color:var(--ink);">อายุ ${a} ปี</div>
+        <div style="font-size:11.5px; color:var(--ink-soft); line-height:1.9; padding-left:6px;">
+          ชายท้วม ${row.male.overweight[0]}-${row.male.overweight[1]} · ชายเริ่มอ้วน ${row.male.obese[0]}-${row.male.obese[1]}<br/>
+          หญิงท้วม ${row.female.overweight[0]}-${row.female.overweight[1]} · หญิงเริ่มอ้วน ${row.female.obese[0]}-${row.female.obese[1]}
+        </div>
+      </div>`;
+    }).join('');
+    const myHighlightHtml = myT ? `
+      <div class="assess-card good" style="margin-top:12px;">
+        <div class="averdict">🎯 เกณฑ์ของหนู (อายุ ${age} ปี · ${genderLabel[gender]||''})</div>
+        <div class="asummary">
+          ท้วม: BMI ${myT.overweight[0]} - ${myT.overweight[1]}<br/>
+          เริ่มอ้วน: BMI ${myT.obese[0]} ขึ้นไป
+        </div>
+      </div>` : '';
+    return `
+    <div class="topbar"><span class="screen-tag">4 · เกณฑ์ BMI</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="screen-content">
+      <div class="title-row"><span class="icon">📊</span><div class="h2">เกณฑ์ BMI ตามอายุและเพศ</div></div>
+      <div style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">หลังจากกรอกวันเกิดและเพศแล้ว นี่คือค่า BMI ที่ใช้เทียบกับหนูโดยเฉพาะ</div>
+      ${myHighlightHtml}
+      <div class="field-label" style="margin-top:14px;">ตารางเกณฑ์ทั้งหมด (อายุ 9-12 ปี)</div>
+      <div class="quiz-card" style="width:100%;">${ageRows}</div>
+      <div style="margin-top:auto;"></div>
+      <button class="big-btn" id="toBodyFromReference">เข้าใจแล้ว ไปกรอกน้ำหนัก/ส่วนสูงต่อ</button>
+    </div>`;
+  },
+
   body: () => `
-    <div class="topbar"><span class="screen-tag">4 · นน./สส.</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="topbar"><span class="screen-tag">5 · นน./สส.</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">📏</span><div class="h2">น้ำหนัก / ส่วนสูง</div></div>
       <div style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">กรอกให้ครบ แล้วเราจะคำนวณค่า BMI ให้หนูดูด้วยนะ</div>
@@ -1081,7 +1117,7 @@ const builders = {
   },
 
   quiz: () => `
-    <div class="topbar"><span class="screen-tag">5 · ความรู้</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
+    <div class="topbar"><span class="screen-tag">6 · ความรู้</span><span class="back-link" id="backBtn">‹ ย้อนกลับ</span></div>
     <div class="screen-content">
       <div class="title-row"><span class="icon">🥗</span><div class="h2">ความรู้เรื่องอาหาร</div></div>
       ${quizQuestions.map((qq,i)=>`
@@ -1751,14 +1787,21 @@ function bindInteractions(s){
         saveData();
         screenState='weeks';
       }else{
-        screenState='body';
+        screenState='bmiReference';
       }
       render();
     });
   }
 
-  if(s==='body'){
+  if(s==='bmiReference'){
     document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='birthdate'; render(); });
+    document.getElementById('toBodyFromReference').addEventListener('click', ()=>{
+      screenState='body'; render();
+    });
+  }
+
+  if(s==='body'){
+    document.getElementById('backBtn').addEventListener('click', ()=>{ screenState='bmiReference'; render(); });
     document.getElementById('toQuiz').addEventListener('click', ()=>{
       const wv = document.getElementById('weightInput').value;
       const hv = document.getElementById('heightInput').value;
